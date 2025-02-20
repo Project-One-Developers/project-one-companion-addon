@@ -523,7 +523,15 @@ end
 -- This is the workhorse function that constructs the profile
 function P1Companion:PrintSimcProfile()
 
+  local result = ""
 
-  local f = P1Companion:GetMainFrame("test test")
+  for i=#VMRT.LootHistory.list,1,-1 do
+      local timeRec,encounterID,instanceID,difficulty,playerName,classID,quantity,itemLink,rollType = strsplit("#",VMRT.LootHistory.list[i])
+      local dateRec = date("%d.%m.%Y %H:%M:%S",tonumber(timeRec))
+      result = result .. VMRT.LootHistory.list[i]
+   
+  end
+
+  local f = P1Companion:GetMainFrame(result)
   f:Show()
 end
