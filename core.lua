@@ -77,20 +77,87 @@ function P1Companion:OnDisable()
 
 end
 
+local function CreateNumberInputPopup()
+  local f = CreateFrame("Frame", "P1CompanionNumberInput", UIParent, "DialogBoxFrame")
+  f:SetSize(250, 125)
+  f:SetPoint("CENTER")
+  f:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\PVPFrame\\UI-Character-PVP-Highlight",
+    edgeSize = 16,
+    insets = { left = 8, right = 8, top = 8, bottom = 8 },
+  })
+  f:SetMovable(true)
+  f:EnableMouse(true)
+  f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  
+  -- Title text
+  local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  title:SetPoint("TOP", 0, -10)
+  title:SetText("Enter number of items to show")
+  
+  -- Create editbox
+  local editbox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+  editbox:SetSize(100, 20)
+  editbox:SetPoint("CENTER", 0, 10)
+  editbox:SetAutoFocus(false)
+  editbox:SetNumeric(true)
+  
+  -- Store references
+  f.editbox = editbox
+  
+  -- Get the button that DialogBoxFrame creates
+  local okayButton = f:GetChildren()
+  
+  -- Set up the button click handler
+  okayButton:SetScript("OnClick", function()
+    local number = tonumber(editbox:GetText())
+    if number and number > 0 then
+      P1Companion:PrintSimcProfile(number)
+      f:Hide()
+      editbox:SetText("")
+    end
+  end)
+  
+  -- Set up enter key press handler
+  editbox:SetScript("OnEnterPressed", function()
+    okayButton:Click()
+  end)
+  
+  -- Set up escape key handler
+  editbox:SetScript("OnEscapePressed", function()
+    f:Hide()
+    editbox:SetText("")
+  end)
+  
+  f:Hide()
+  return f
+end
+
 
 function P1Companion:HandleChatCommand(input)
   local args = {strsplit(' ', input)}
 
-  local limit = nil
-  
   for i = 1, #args do
     local arg = args[i]
     if arg == 'loot' then
-      -- Check if next argument is a number
-      if args[i + 1] and tonumber(args[i + 1]) then
-        limit = tonumber(args[i + 1])
+      -- Check if there's a number argument after 'loot'
+      local nextArg = args[i + 1]
+      local number = nextArg and tonumber(nextArg)
+      
+      if number and number > 0 then
+        -- If a valid number was provided, show results directly
+        self:PrintSimcProfile(number)
+      else
+        -- If no number or invalid number, show the input popup
+        if not P1CompanionNumberInput then
+          CreateNumberInputPopup()
+        end
+        P1CompanionNumberInput:Show()
+        P1CompanionNumberInput.editbox:SetFocus()
       end
-      self:PrintSimcProfile(limit)
       return
     elseif arg == 'minimap' then
       OptionsDB.profile.minimap.hide = not OptionsDB.profile.minimap.hide
