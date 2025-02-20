@@ -81,9 +81,17 @@ end
 function P1Companion:HandleChatCommand(input)
   local args = {strsplit(' ', input)}
 
-  for _, arg in ipairs(args) do
+  local limit = nil
+  
+  for i = 1, #args do
+    local arg = args[i]
     if arg == 'loot' then
-      self:PrintSimcProfile()
+      -- Check if next argument is a number
+      if args[i + 1] and tonumber(args[i + 1]) then
+        limit = tonumber(args[i + 1])
+      end
+      self:PrintSimcProfile(limit)
+      return
     elseif arg == 'minimap' then
       OptionsDB.profile.minimap.hide = not OptionsDB.profile.minimap.hide
       DEFAULT_CHAT_FRAME:AddMessage(
@@ -93,7 +101,6 @@ function P1Companion:HandleChatCommand(input)
       return
     end
   end
-  
 end
 
 function P1Companion:UpdateMinimapButton()
@@ -521,15 +528,25 @@ end
 -- end
 
 -- This is the workhorse function that constructs the profile
-function P1Companion:PrintSimcProfile()
-
+function P1Companion:PrintSimcProfile(limit)
   local result = ""
-
-  for i=#VMRT.LootHistory.list,1,-1 do
-      local timeRec,encounterID,instanceID,difficulty,playerName,classID,quantity,itemLink,rollType = strsplit("#",VMRT.LootHistory.list[i])
-      local dateRec = date("%d.%m.%Y %H:%M:%S",tonumber(timeRec))
-      result = result .. VMRT.LootHistory.list[i]
-   
+  local count = 0
+  local total = #VMRT.LootHistory.list
+  
+  -- If no limit specified, show all items ending with #0
+  limit = limit or total
+  
+  -- Start from the most recent item and count down
+  for i = total, 1, -1 do
+    local entry = VMRT.LootHistory.list[i]
+    -- Check if the entry ends with #0
+    if entry:match("#0$") then
+      result = result .. entry .. "\n"
+      count = count + 1
+      if count >= limit then
+        break
+      end
+    end
   end
 
   local f = P1Companion:GetMainFrame(result)
