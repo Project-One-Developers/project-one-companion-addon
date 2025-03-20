@@ -7,18 +7,18 @@ P1Companion = LibStub("AceAddon-3.0"):NewAddon(P1Companion, "P1Companion", "AceC
 
 LibDBIcon = LibStub("LibDBIcon-1.0")
 
-local SimcFrame = nil
+local P1Frame = nil
 local OptionsDB = nil
 
 -- Set up DataBroker for minimap button
-SimcLDB = LibStub("LibDataBroker-1.1"):NewDataObject("P1Companion", {
+P1LDB = LibStub("LibDataBroker-1.1"):NewDataObject("P1Companion", {
   type = "data source",
   text = "P1Companion",
   label = "P1Companion",
   icon = "Interface\\AddOns\\P1Companion\\logo",
   OnClick = function()
-    if SimcFrame and SimcFrame:IsShown() then
-      SimcFrame:Hide()
+    if P1Frame and P1Frame:IsShown() then
+      P1Frame:Hide()
     else
       P1Companion:PrintLootHistory()
     end
@@ -27,7 +27,7 @@ SimcLDB = LibStub("LibDataBroker-1.1"):NewDataObject("P1Companion", {
     tt:AddLine("P1 Companion")
     tt:AddLine(" ")
     tt:AddLine("Click to show loots")
-    tt:AddLine("To toggle minimap button, type '/simc minimap'")
+    tt:AddLine("To toggle minimap button, type '/P1 minimap'")
   end
 })
 
@@ -55,7 +55,7 @@ function P1Companion:OnInitialize()
       },
     },
   });
-  LibDBIcon:Register("P1Companion", SimcLDB, OptionsDB.profile.minimap)
+  LibDBIcon:Register("P1Companion", P1LDB, OptionsDB.profile.minimap)
   P1Companion:UpdateMinimapButton()
   P1Companion:RegisterChatCommand('p1', 'HandleChatCommand')
   AddonCompartmentFrame:RegisterAddon({
@@ -158,6 +158,8 @@ function P1Companion:HandleChatCommand(input)
         P1CompanionNumberInput.editbox:SetFocus()
       end
       return
+    elseif arg == 'comp' then
+      self:PrintComp()
     elseif arg == 'minimap' then
       OptionsDB.profile.minimap.hide = not OptionsDB.profile.minimap.hide
       DEFAULT_CHAT_FRAME:AddMessage(
@@ -181,10 +183,10 @@ end
 
 function P1Companion:GetMainFrame(text)
   -- Frame code largely adapted from https://www.wowinterface.com/forums/showpost.php?p=323901&postcount=2
-  if not SimcFrame then
+  if not P1Frame then
     -- Main Frame
     local frameConfig = OptionsDB.profile.frame
-    local f = CreateFrame("Frame", "SimcFrame", UIParent, "DialogBoxFrame")
+    local f = CreateFrame("Frame", "P1Frame", UIParent, "DialogBoxFrame")
     f:ClearAllPoints()
     -- load position from local DB
     f:SetPoint(
@@ -220,15 +222,15 @@ function P1Companion:GetMainFrame(text)
     end)
 
     -- scroll frame
-    local sf = CreateFrame("ScrollFrame", "SimcScrollFrame", f, "UIPanelScrollFrameTemplate")
+    local sf = CreateFrame("ScrollFrame", "P1ScrollFrame", f, "UIPanelScrollFrameTemplate")
     sf:SetPoint("LEFT", 16, 0)
     sf:SetPoint("RIGHT", -32, 0)
     sf:SetPoint("TOP", 0, -32)
-    sf:SetPoint("BOTTOM", SimcFrameButton, "TOP", 0, 0)
+    sf:SetPoint("BOTTOM", P1FrameButton, "TOP", 0, 0)
 
     -- edit box
     local ctrlDown = false
-    local eb = CreateFrame("EditBox", "SimcEditBox", SimcScrollFrame)
+    local eb = CreateFrame("EditBox", "P1EditBox", P1ScrollFrame)
     eb:SetSize(sf:GetSize())
     eb:SetMultiLine(true)
     eb:SetAutoFocus(true)
@@ -265,7 +267,7 @@ function P1Companion:GetMainFrame(text)
       -- new func for dragonflight
       f:SetResizeBounds(150, 100, nil, nil)
     end
-    local rb = CreateFrame("Button", "SimcResizeButton", f)
+    local rb = CreateFrame("Button", "P1ResizeButton", f)
     rb:SetPoint("BOTTOMRIGHT", -6, 7)
     rb:SetSize(16, 16)
 
@@ -298,11 +300,11 @@ function P1Companion:GetMainFrame(text)
       OptionsDB.profile.closeOnCopy = self:GetChecked()
     end)
 
-    SimcFrame = f
+    P1Frame = f
   end
-  SimcEditBox:SetText(text)
-  SimcEditBox:HighlightText()
-  return SimcFrame
+  P1EditBox:SetText(text)
+  P1EditBox:HighlightText()
+  return P1Frame
 end
 
 
@@ -333,6 +335,19 @@ function P1Companion:PrintLootHistory(limit)
     --     break
     --   end
     -- end
+  end
+
+  local f = P1Companion:GetMainFrame(result)
+  f:Show()
+end
+
+function P1Companion:PrintComp()
+  local result = ""
+  for i = 1, 40 do
+      local name,_,subgroup = GetRaidRosterInfo(i)
+      if name and subgroup > 0 and subgroup <= 4  then
+        result = result .. name .. "\n"
+      end
   end
 
   local f = P1Companion:GetMainFrame(result)
