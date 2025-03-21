@@ -326,15 +326,6 @@ function P1Companion:PrintLootHistory(limit)
     if count >= limit then
       break
     end
-
-    -- Check if the entry ends with #0
-    -- if entry:match("#0$") then
-    --   result = result .. entry .. "\n"
-    --   count = count + 1
-    --   if count >= limit then
-    --     break
-    --   end
-    -- end
   end
 
   local f = P1Companion:GetMainFrame(result)
