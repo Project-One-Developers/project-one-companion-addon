@@ -1,6 +1,6 @@
 ## Interface: 110007, 110100
 ## Title: P1Companion
-## IconTexture: Interface\Addons\SimulationCraft\logo
+## IconTexture: Interface\Addons\P1Companion\logo
 ## Notes: P1 Companion toolkit
 ## Author: Shant,Zorby
 ## Version: 11.1.0-01
