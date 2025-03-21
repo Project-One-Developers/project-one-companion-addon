@@ -7,8 +7,7 @@
 ## OptionalDependencies: Ace3, LibDBIcon, LibDataBroker-1.1
 ## SavedVariables: P1CompanionDB
 
-## X-Curse-Project-ID: 82745
-## X-Wago-ID: BNBeRVGx
+## X-Wago-ID: QKywjYN7
 
 libs\LibStub\LibStub.lua
 libs\CallbackHandler-1.0\CallbackHandler-1.0.lua

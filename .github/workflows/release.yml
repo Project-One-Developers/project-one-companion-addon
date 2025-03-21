@@ -1,0 +1,24 @@
+name: Release
+
+on:
+  # GitHub releases are created when a tag is pushed
+  push:
+    tags:
+      - '**'
+  # Can also run manually
+  workflow_dispatch:
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+
+      - name: WoW Packager
+        uses: BigWigsMods/packager@v2
+        env:
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+          WAGO_API_TOKEN: ${{ secrets.WAGO_API_KEY }}
+          #CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          #WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
