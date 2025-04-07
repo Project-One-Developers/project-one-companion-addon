@@ -334,9 +334,18 @@ end
 
 function P1Companion:PrintComp()
   local result = ""
+  local diff = GetRaidDifficultyID() -- 16 Mythic
+
+   -- in case of normal/hc we take group 1-6
+  local upperGroup = 6
+  if diff == 16 then
+    -- in case of mythic we take group 1-4
+    upperGroup = 4
+  end
+
   for i = 1, 40 do
       local name,_,subgroup = GetRaidRosterInfo(i)
-      if name and subgroup > 0 and subgroup <= 4  then
+      if name and subgroup > 0 and subgroup <= upperGroup  then
         result = result .. name .. "\n"
       end
   end
