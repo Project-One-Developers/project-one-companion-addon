@@ -1,9 +1,9 @@
-## Interface: 110007, 110100
+## Interface: 110100, 110105
 ## Title: P1Companion
 ## IconTexture: Interface\Addons\P1Companion\logo
 ## Notes: P1 Companion toolkit
 ## Author: Shant,Zorby
-## Version: 11.1.0-01
+## Version: 11.1.5-01
 ## OptionalDependencies: Ace3, LibDBIcon, LibDataBroker-1.1
 ## SavedVariables: P1CompanionDB
 
