@@ -1,9 +1,13 @@
-## Interface: 110100, 110105
+## Interface: 110200
+
 ## Title: P1Companion
+## Version: 1.1.0
 ## IconTexture: Interface\Addons\P1Companion\logo
+
 ## Notes: P1 Companion toolkit
 ## Author: Shant,Zorby
-## Version: 11.1.5-01
+## DefaultState: Enable
+## Dependencies: MythicDungeonTools
 ## OptionalDependencies: Ace3, LibDBIcon, LibDataBroker-1.1
 ## SavedVariables: P1CompanionDB
 
