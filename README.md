@@ -18,4 +18,3 @@ Maintainers
 -----------
 
 * shant
-* zorby
