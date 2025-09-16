@@ -48,8 +48,9 @@ local function rndMedia(t)
     end
 
     -- Get the current minutes from the game time
-    local _, minutes = GetGameTime()
-
+    local time = GetServerTime()
+    local minutes = Round((tonumber(date("%M", time)) / 5))
+    
     -- The + 1 is crucial to adjust for Lua's 1-based indexing
     local rndIdx = (minutes % #t) + 1
 
