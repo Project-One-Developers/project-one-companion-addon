@@ -59,6 +59,8 @@
         "ALTERNATE_POWER_INDEX",
         "FAILED",
         "INTERRUPTED",
-        "ReloadUI"
+        "ReloadUI",
+        "GameTooltip_ShowCompareItem",
+        "GameTooltip_HideShoppingTooltips"
     ]
 }

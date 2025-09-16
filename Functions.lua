@@ -31,8 +31,19 @@ function POI:Print(...)
     end
 end
 
+function POI:GetUnitGuildInfo(unitName)
+    for i = 1,GetNumGuildMembers() do
+        local memberNameRealm = GetGuildRosterInfo(i)
+        local memberName = memberNameRealm and strsplit("-", memberNameRealm) or nil
+		if memberName == unitName then
+			return GetGuildRosterInfo(i)
+		end
+	end
+end
+
 function POAPI:Shorten(unit, num, role, AddonName, combined) -- Returns color coded Name/Nickname
-    local classFile = unit and select(2, UnitClass(unit))
+    POI:Print("Shorten", unit)    
+    local classFile = unit and select(2, UnitClass(unit)) or select(11, POI:GetUnitGuildInfo(unit))
     if role then -- create role icon if requested
         local specid = 0
         if unit then specid = POAPI:GetSpecs(unit) or WeakAuras.SpecForUnit(unit) or 0 end
@@ -49,9 +60,9 @@ function POAPI:Shorten(unit, num, role, AddonName, combined) -- Returns color co
         end
     end
     if classFile then -- basically "if unit found"
-        local name = UnitName(unit)
+        local name = UnitName(unit) or unit -- fallback to unit if name not found (eg for guild members name)
         local color = GetClassColorObj(classFile)
-        name = num and WeakAuras.WA_Utf8Sub(POAPI:GetName(name, AddonName), num) or POAPI:GetName(name, AddonName) -- shorten name before wrapping in color
+        name = num and WeakAuras.WA_Utf8Sub(NSAPI:GetName(name, AddonName), num) or NSAPI:GetName(name, AddonName) -- shorten name before wrapping in color
         if color then -- should always be true anyway?
             return combined and role..color:WrapTextInColorCode(name) or color:WrapTextInColorCode(name), combined and "" or role
         else
@@ -145,17 +156,46 @@ function POI:GetCompString()
     return result
 end
 
+function AsyncHideSimcFrame()
+    POI.Print("Simc hiding async")
+    local SimcFrame = _G["SimcFrame"]
+    C_Timer.After(0.2, function()
+        if SimcFrame then
+            _G["SimcFrame"]:Hide()
+            POI.SimcHideNext = false
+        else
+            AsyncHideSimcFrame()
+        end
+    end)
+end
+
 function POI:GetSimc()
     if not C_AddOns.IsAddOnLoaded("Simulationcraft") then
         print("Addon Simulationcraft is disabled, can't read the profile")
         return "empty"
     end
     Simulationcraft = LibStub("AceAddon-3.0"):GetAddon("Simulationcraft")
+    
+    -- inject hook
+    if not POI.SimcHook then
+        POI.SimcHook = true
+        hooksecurefunc(Simulationcraft, 'PrintSimcProfile', function()
+            local SimcFrame = _G["SimcFrame"]
+            if POI.SimcHideNext then
+                if SimcFrame then
+                    _G["SimcFrame"]:Hide()
+                    POI.SimcHideNext = false
+                else
+                    AsyncHideSimcFrame()
+                end
+            end
+	    end)
+    end
+    
+    POI.SimcHideNext = true
     Simulationcraft:PrintSimcProfile(false, false, false, nil) -- there is no option to direcltly get the text, so we use the editbox it creates......
     local SimcEditBox = _G["SimcEditBox"];
-    local SimcFrame = _G["SimcFrame"];
-	local simc = SimcEditBox and SimcEditBox.GetText and SimcEditBox:GetText();
-    SimcFrame:Hide()
-    POI.Print("Simc profile generated:", simc)
+	local simc = SimcEditBox and SimcEditBox.GetText and SimcEditBox:GetText() or "Error during reading"
+    --POI.Print("Simc profile generated:", simc)
     return simc
 end

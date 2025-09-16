@@ -23,9 +23,11 @@ function POI:EventHandler(e, wowevent, internal, ...) -- internal checks whether
             POC.Settings["AutoUpdateWA"] = POC.Settings["AutoUpdateWA"] or false
             POC.Settings["Debug"] = POC.Settings["Debug"] or false
             POC.Settings["DebugLogs"] = POC.Settings["DebugLogs"] or false
+            POC.Settings["MemeBreakTimer"] = POC.Settings["MemeBreakTimer"] or true
             POC.POUI.AutoComplete = POC.POUI.AutoComplete or {}
             POC.POUI.AutoComplete["WA"] = POC.POUI.AutoComplete["WA"] or {}
             POC.POUI.AutoComplete["Addon"] = POC.POUI.AutoComplete["Addon"] or {}
+            POC.POUI.AutoComplete["Character"] = POC.POUI.AutoComplete["Character"] or {}
         end
     elseif e == "PLAYER_ENTERING_WORLD" and wowevent then
         --POI:AutoImport()

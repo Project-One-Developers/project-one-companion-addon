@@ -10,7 +10,7 @@ local expressway = [[Interface\AddOns\P1Companion\Media\Fonts\Expressway.TTF]]
 
 local TABS_LIST = {
     { name = "General",   text = "General" },
-    { name = "Versions",  text = "Simulations(WIP)" },
+    { name = "Versions",  text = "Simulations" },
     { name = "WeakAuras", text = "WeakAuras(WIP)" },
 }
 local authorsString = "By Shant"
@@ -38,54 +38,23 @@ POUI.OptionsChanged = {
 }
 
 -- version check ui
-local component_type = "Simc"
-local checkable_components = { "Simc" }
-local function build_checkable_components_options()
-    local t = {}
-    for i = 1, #checkable_components do
-        tinsert(t, {
-            label = checkable_components[i],
-            value = checkable_components[i],
-            onclick = function(_, _, value)
-                component_type = value
-            end
-        })
-    end
-    return t
-end
-
-local component_name = ""
 local function BuildVersionCheckUI(parent)
+    local restrict_to_char_label = DF:CreateLabel(parent, "Restrict to", 9.5, "white")
+    restrict_to_char_label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -100)
 
-    local component_type_label = DF:CreateLabel(parent, "Component Type", 9.5, "white")
-    component_type_label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -100)
-    
-    local component_type_dropdown = DF:CreateDropDown(parent, function() return build_checkable_components_options() end, checkable_components[1])
-    component_type_dropdown:SetTemplate(options_dropdown_template)
-    component_type_dropdown:SetPoint("LEFT", component_type_label, "RIGHT", 5, 0)
-
-    local component_name_label = DF:CreateLabel(parent, "WeakAura/Addon Name", 9.5, "white")
-    component_name_label:SetPoint("LEFT", component_type_dropdown, "RIGHT", 10, 0)
-
-    local component_name_entry = DF:CreateTextEntry(parent, function(_, _, value) component_name = value end, 250, 18)
-    component_name_entry:SetTemplate(options_button_template)
-    component_name_entry:SetPoint("LEFT", component_name_label, "RIGHT", 5, 0)
-    component_name_entry:SetHook("OnEditFocusGained", function(self)
-        component_name_entry.WAAutoCompleteList = POC.POUI.AutoComplete["WA"] or {}
-        component_name_entry.AddonAutoCompleteList = POC.POUI.AutoComplete["Addon"] or {}
-        local component_type = component_type_dropdown:GetValue()
-        if component_type == "WA" then
-            component_name_entry:SetAsAutoComplete("WAAutoCompleteList", _, true)
-        elseif component_type == "Addon" then
-            component_name_entry:SetAsAutoComplete("AddonAutoCompleteList", _, true)
-        end
+    local restrict_to_char_entry = DF:CreateTextEntry(parent, function(_, _, _) end, 250, 18)
+    restrict_to_char_entry:SetTemplate(options_button_template)
+    restrict_to_char_entry:SetPoint("LEFT", restrict_to_char_label, "RIGHT", 5, 0)
+    restrict_to_char_entry:SetHook("OnEditFocusGained", function(self)
+        restrict_to_char_entry.CharacterAutoCompleteList = POC.POUI.AutoComplete["Character"] or {}
+        restrict_to_char_entry:SetAsAutoComplete("CharacterAutoCompleteList", _, true)
     end)
 
-    local version_check_button = DF:CreateButton(parent, function()
-    end, 120, 18, "Check Versions")
-    version_check_button:SetTemplate(options_button_template)
-    version_check_button:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -30, -100)
-    version_check_button:SetHook("OnShow", function(self)
+    local info_check_button = DF:CreateButton(parent, function()
+    end, 120, 18, "Get Info")
+    info_check_button:SetTemplate(options_button_template)
+    info_check_button:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -30, -100)
+    info_check_button:SetHook("OnShow", function(self)
         if (UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") or POC.Settings["Debug"]) then
             self:Enable()
         else
@@ -94,13 +63,77 @@ local function BuildVersionCheckUI(parent)
     end)
 
     local character_name_header = DF:CreateLabel(parent, "Character Name", 11)
-    character_name_header:SetPoint("TOPLEFT", component_type_label, "BOTTOMLEFT", 10, -20)
+    character_name_header:SetPoint("TOPLEFT", restrict_to_char_label, "BOTTOMLEFT", 10, -20)
 
-    local version_number_header = DF:CreateLabel(parent, "Version Number", 11)
-    version_number_header:SetPoint("LEFT", character_name_header, "RIGHT", 120, 0)
+    local simc_header = DF:CreateLabel(parent, "Simc String", 11)
+    simc_header:SetPoint("LEFT", character_name_header, "RIGHT", 120, 0)
 
-    local duplicate_header = DF:CreateLabel(parent, "Duplicate", 11)
-    duplicate_header:SetPoint("LEFT", version_number_header, "RIGHT", 50, 0)
+    local weeklychest_header = DF:CreateLabel(parent, "Weekly Chest", 11)
+    weeklychest_header:SetPoint("LEFT", simc_header, "RIGHT", 90, 0)
+
+    local createLootSquare = function(parent, lootIndex, itemLink)
+        local lootSquare = CreateFrame("frame", parent:GetName() .. "LootSquare" .. lootIndex, parent)
+        lootSquare:SetSize(20, 20)
+        lootSquare:SetFrameLevel(parent:GetFrameLevel()+10)
+        --lootSquare:Hide()
+
+        lootSquare:SetScript("OnEnter", function(self)
+            if (itemLink) then
+                GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+                GameTooltip:SetHyperlink(itemLink)
+                GameTooltip:Show()
+
+                self:SetScript("OnUpdate", function()
+                    if (IsShiftKeyDown()) then
+                        GameTooltip_ShowCompareItem()
+                    else
+                        GameTooltip_HideShoppingTooltips(GameTooltip)
+                    end
+                end)
+            end
+        end)
+
+        lootSquare:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+            self:SetScript("OnUpdate", nil)
+        end)
+
+        -- local shadowTexture = playerBanner:CreateTexture("$parentShadowTexture", "artwork")
+        -- shadowTexture:SetTexture([[Interface\AddOns\Details\images\end_of_mplus_banner_mask.png]])
+        -- shadowTexture:SetTexCoord(441/512, 511/512, 81/512, 151/512)
+        -- shadowTexture:SetSize(32, 32)
+        -- shadowTexture:SetVertexColor(0.05, 0.05, 0.05, 0.6)
+        -- shadowTexture:SetPoint("center", lootSquare, "center", 0, 0)
+        -- lootSquare.ShadowTexture = shadowTexture
+
+        local lootIcon = lootSquare:CreateTexture("$parentLootIcon", "artwork")
+        lootIcon:SetSize(20, 20)
+        lootIcon:SetPoint("center", lootSquare, "center", 0, 0)
+        lootIcon:SetTexture([[Interface\ICONS\INV_Misc_QuestionMark]])
+        lootSquare.LootIcon = lootIcon
+
+        local lootIconBorder = lootSquare:CreateTexture("$parentLootSquareBorder", "overlay")
+        lootIconBorder:SetTexture([[Interface\COMMON\BlackIconFrame]])
+        lootIconBorder:SetTexCoord(0, 1, 0, 1)
+        lootIconBorder:SetSize(20, 20)
+        lootIconBorder:SetPoint("center", lootIcon, "center", 0, 0)
+        lootSquare.LootIconBorder = lootIconBorder
+
+        -- local lootItemLevel = lootSquare:CreateFontString("$parentLootItemLevel", "overlay", "GameFontNormal")
+        -- lootItemLevel:SetPoint("bottom", lootSquare, "bottom", 0, -4)
+        -- lootItemLevel:SetTextColor(1, 1, 1)
+        -- --detailsFramework:SetFontSize(lootItemLevel, 11)
+        -- lootSquare.LootItemLevel = lootItemLevel
+
+        -- local lootItemLevelBackgroundTexture = lootSquare:CreateTexture("$parentItemLevelBackgroundTexture", "artwork", nil, 6)
+        -- lootItemLevelBackgroundTexture:SetTexture([[Interface\Cooldown\LoC-ShadowBG]])
+        -- lootItemLevelBackgroundTexture:SetPoint("bottomleft", lootSquare, "bottomleft", -7, -3)
+        -- lootItemLevelBackgroundTexture:SetPoint("bottomright", lootSquare, "bottomright", 7, -15)
+        -- lootItemLevelBackgroundTexture:SetHeight(10)
+        -- lootSquare.LootItemLevelBackgroundTexture = lootItemLevelBackgroundTexture
+
+        return lootSquare
+    end
 
     local function refresh(self, data, offset, totalLines)
         for i = 1, totalLines do
@@ -166,6 +199,14 @@ local function BuildVersionCheckUI(parent)
         end
     end
 
+    local textEntryOnFocusGained = function(self)
+        self:HighlightText()
+    end
+        
+    local textEntryOnFocusLost = function(self)
+        self:HighlightText (0, 0)
+    end
+
     local function createLineFunc(self, index)
         local line = CreateFrame("button", "$parentLine" .. index, self, "BackdropTemplate")
         line:SetPoint("TOPLEFT", self, "TOPLEFT", 1, -((index-1) * (self.LineHeight+1)) - 1)
@@ -174,66 +215,92 @@ local function BuildVersionCheckUI(parent)
         DF:CreateHighlightTexture(line)
         line.index = index
 
-        local name = line:CreateFontString(nil, "OVERLAY")
+        local name = DF:CreateLabel(line, "", "white")
         name:SetWidth(100)
         name:SetJustifyH("LEFT")
         name:SetFont(expressway, 12, "OUTLINE")
         name:SetPoint("LEFT", line, "LEFT", 5, 0)
         line.name = name
 
-        local version = line:CreateFontString(nil, "OVERLAY")
-        version:SetWidth(100)
-        version:SetJustifyH("LEFT")
-        version:SetFont(expressway, 12, "OUTLINE")
-        version:SetPoint("LEFT", name, "RIGHT", 110, 0)
-        line.version = version
+        local simc = DF:CreateTextEntry(line, function() end, 165, 20)
+        simc:SetJustifyH("LEFT")
+        simc:SetFont(expressway, 12, "OUTLINE")
+        simc:SetPoint("LEFT", name, "RIGHT", 110, 0)
+        simc:SetTemplate(options_dropdown_template)
+        simc:SetHook("OnEditFocusGained", textEntryOnFocusGained)
+        simc:SetHook("OnEditFocusLost", textEntryOnFocusLost)
+        line.version = simc
 
-        local duplicates = line:CreateFontString(nil, "OVERLAY")
-        duplicates:SetWidth(100)
-        duplicates:SetJustifyH("LEFT")
-        duplicates:SetFont(expressway, 12, "OUTLINE")
-        duplicates:SetPoint("LEFT", version, "RIGHT", 30, 0)
-        line.duplicates = duplicates
+        local weeklyChest = DF:CreateLabel(line, "", "white")
+        weeklyChest:SetWidth(20)
+        weeklyChest:SetJustifyH("LEFT")
+        weeklyChest:SetFont(expressway, 12, "OUTLINE")
+        weeklyChest:SetPoint("LEFT", simc, "RIGHT", 10, 0)
+        line.duplicates = weeklyChest
+        
+        local weeklyItems = DF:CreateLabel(line, "", "white")
+        weeklyItems:SetWidth(100)
+        weeklyItems:SetJustifyH("LEFT")
+        weeklyItems:SetFont(expressway, 12, "OUTLINE")
+        weeklyItems:SetPoint("LEFT", weeklyChest, "RIGHT", 10, 0)
+        line.test = weeklyItems
+
+        POI:Print("weeklyItems", weeklyItems)
+
+        -- loot items for testing
+        line.LootSquares = {}
+        for i = 1, 1 do
+            local lootSquare = createLootSquare(line, i, "|cff0070dd|Hitem:63470::::::::53:257::2:1:4198:2:28:1199:9:35:::::|h[Missing Diplomat's Pauldrons]|h|r")
+            if (i == 1) then
+                lootSquare:SetPoint("RIGHT", weeklyItems.widget, "LEFT", 30, 0)
+            else
+                lootSquare:SetPoint("RIGHT", line.LootSquares[i-1], "LEFT", -2, 0)
+            end
+
+            -- debug only
+            -- local lootInfo = lootCandidates[i]
+            -- local itemLink = lootInfo.itemLink
+            -- local effectiveILvl = lootInfo.effectiveILvl
+            -- local itemQuality = lootInfo.itemQuality
+            -- local itemID = lootInfo.itemID
+            --lootSquare.itemLink = itemLink --will error if this the thrid lootSquare (creates only 2 per banner)
+            lootSquare.LootIcon:SetTexture(C_Item.GetItemIconByID(63470))
+            --local rarityColor = --[[GLOBAL]] ITEM_QUALITY_COLORS[itemQuality]
+            --lootSquare.LootIconBorder:SetVertexColor(rarityColor.r, rarityColor.g, rarityColor.b, 1)
+            --lootSquare.LootItemLevel:SetText(effectiveILvl or "0")
+
+            --lootSquare:Show()
+
+            line.LootSquares[i] = lootSquare
+            line["lootSquare" .. i] = lootSquare
+        end
+        -- local lootsquare = createLootSquare(line, "|cff0070dd|Hitem:63470::::::::53:257::2:1:4198:2:28:1199:9:35:::::|h[Missing Diplomat's Pauldrons]|h|r")
+        -- lootsquare:SetPoint("right", weeklyItems, "RIGHT", 10, 0)
+
+        -- local weeklyChest = line:CreateFontString(nil, "OVERLAY")
+        -- weeklyChest:SetWidth(100)
+        -- weeklyChest:SetJustifyH("LEFT")
+        -- weeklyChest:SetFont(expressway, 12, "OUTLINE")
+        -- weeklyChest:SetPoint("LEFT", line, "RIGHT", 130, 0)
+        -- line.duplicates = weeklyChest
 
         return line
     end
 
     local scrollLines = 19
-    -- sample data for testing
-    local sample_data = {
-        { name = "Player1",  version = "1.0.0",         duplicate = false },
-        { name = "Player2",  version = "WA Missing",    duplicate = false },
-        { name = "Player3",  version = "1.0.1",         duplicate = true },
-        { name = "Player4",  version = "0.9.9",         duplicate = false },
-        { name = "Player5",  version = "1.0.0",         duplicate = false },
-        { name = "Player6",  version = "Addon Missing", duplicate = false },
-        { name = "Player7",  version = "1.0.0",         duplicate = true },
-        { name = "Player8",  version = "0.9.8",         duplicate = false },
-        { name = "Player9",  version = "1.0.0",         duplicate = false },
-        { name = "Player10", version = "Note Missing",  duplicate = false },
-        { name = "Player11", version = "1.0.0",         duplicate = false },
-        { name = "Player12", version = "0.9.9",         duplicate = true },
-        { name = "Player13", version = "1.0.0",         duplicate = false },
-        { name = "Player14", version = "WA Missing",    duplicate = false },
-        { name = "Player15", version = "1.0.0",         duplicate = false },
-        { name = "Player16", version = "0.9.7",         duplicate = false },
-        { name = "Player17", version = "1.0.0",         duplicate = true },
-        { name = "Player18", version = "Addon Missing", duplicate = false },
-        { name = "Player19", version = "1.0.0",         duplicate = false },
-        { name = "Player20", version = "0.9.9",         duplicate = false }
-    }
+
     local version_check_scrollbox = DF:CreateScrollBox(parent, "VersionCheckScrollBox", refresh, {},
         window_width - 40,
-        window_height - 200, scrollLines, 20, createLineFunc)
+        window_height - 180, scrollLines, 20, createLineFunc)
     DF:ReskinSlider(version_check_scrollbox)
     version_check_scrollbox.ReajustNumFrames = true
-    version_check_scrollbox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -170)
+    version_check_scrollbox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -150)
     for i = 1, scrollLines do
         version_check_scrollbox:CreateLine(createLineFunc)
     end
     version_check_scrollbox:Refresh()
 
-    version_check_scrollbox.name_map = {}
+    version_check_scrollbox.name_map = {} -- name is the key
     
     -- invoke to add data when receive msg back from players
     local addData = function(self, data, url)
@@ -256,23 +323,23 @@ local function BuildVersionCheckUI(parent)
     version_check_scrollbox.AddData = addData
     version_check_scrollbox.WipeData = wipeData
 
-    version_check_button:SetScript("OnClick", function(self)
+    info_check_button:SetScript("OnClick", function(self)
         
-        local text = component_name_entry:GetText()
-        local component_type = component_type_dropdown:GetValue()
-        if text and text ~= ""  and component_type ~= "Note" and not tContains(POC.POUI.AutoComplete[component_type], text) then
-            tinsert(POC.POUI.AutoComplete[component_type], text)
+        local charName = restrict_to_char_entry:GetText()
+        local component_type = "Simc" -- no other checks available in this ui tab
+        
+        -- fill autocomplete list if needed
+        if charName and charName ~= ""  and not tContains(POC.POUI.AutoComplete["Character"], charName) then
+            tinsert(POC.POUI.AutoComplete["Character"], charName)
         end
-
-        if not text or text == "" and component_type ~= "Note" then return end
         
         local now = GetTime()
         if POI.LastVersionCheck and POI.LastVersionCheck > now-2 then return end -- don't let user spam requests
         POI.LastVersionCheck = now
         version_check_scrollbox:WipeData()
-        local userData, url = POI:RequestVersionNumber(component_type, text)
+        local userData, url = POI:RequestVersionNumber(component_type, charName)
         if userData then
-            POI.VersionCheckData = { version = userData.version, type = component_type, name = text, url = url, lastclick = {} }
+            POI.VersionCheckData = { version = userData.version, type = component_type, name = charName, url = url, lastclick = {} }
             version_check_scrollbox:AddData(userData, url)
         end
     end)
@@ -347,6 +414,23 @@ function POUI:Init()
                 POC.Settings["DebugLogs"] = value
             end,
         },
+
+        {
+            type = "breakline"
+        },   
+
+        { type = "label", get = function() return "Meme Images" end,     text_template = DF:GetTemplate("font", "ORANGE_FONT_TEMPLATE") },
+        {
+            type = "toggle",
+            boxfirst = true,
+            name = "Break timer",
+            desc = "Enable Meme images during break timer",
+            get = function() return POC.Settings["MemeBreakTimer"] end,
+            set = function(self, fixedparam, value)
+                POUI.OptionsChanged.general["MEME_BREAK_TIMER"] = true
+                POC.Settings["MemeBreakTimer"] = value
+            end,
+        },  
     }
 
     local weakaura_options1_table = {
