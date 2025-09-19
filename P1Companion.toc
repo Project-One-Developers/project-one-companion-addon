@@ -1,7 +1,7 @@
 ## Interface: 110200
 
 ## Title: P1Companion
-## Version: 2.0.0
+## Version: 2.1.0
 ## IconTexture: Interface\Addons\P1Companion\Media\P1Logo.tga
 ## Author: Shant
 ## DefaultState: Enable
