@@ -39,16 +39,16 @@ POUI.OptionsChanged = {
 
 -- version check ui
 local function BuildVersionCheckUI(parent)
+    
     local restrict_to_char_label = DF:CreateLabel(parent, "Restrict to", 9.5, "white")
     restrict_to_char_label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -100)
 
-    local restrict_to_char_entry = DF:CreateTextEntry(parent, function(_, _, _) end, 250, 18)
-    restrict_to_char_entry:SetTemplate(options_button_template)
-    restrict_to_char_entry:SetPoint("LEFT", restrict_to_char_label, "RIGHT", 5, 0)
-    restrict_to_char_entry:SetHook("OnEditFocusGained", function(self)
-        restrict_to_char_entry.CharacterAutoCompleteList = POC.POUI.AutoComplete["Character"] or {}
-        restrict_to_char_entry:SetAsAutoComplete("CharacterAutoCompleteList", _, true)
-    end)
+    local restrictToCharEntry = DF:CreateTextEntry(parent, function(_, _, _) end, 250, 18, "RestrictToPlayerTextBox", _, _, options_dropdown_template)
+    --restrictToCharEntry:SetTemplate(options_button_template)
+    restrictToCharEntry.tooltip = "Enter the player name to restrict the info check"
+    restrictToCharEntry:SetPoint("LEFT", restrict_to_char_label, "RIGHT", 5, 0)
+    restrictToCharEntry.CharacterAutoCompleteList = POI:GetOnlineGuildNames()
+    restrictToCharEntry:SetAsAutoComplete("CharacterAutoCompleteList")
 
     local info_check_button = DF:CreateButton(parent, function()
     end, 120, 18, "Get Info")
@@ -325,13 +325,8 @@ local function BuildVersionCheckUI(parent)
 
     info_check_button:SetScript("OnClick", function(self)
         
-        local charName = restrict_to_char_entry:GetText()
+        local charName = restrictToCharEntry:GetText()
         local component_type = "Simc" -- no other checks available in this ui tab
-        
-        -- fill autocomplete list if needed
-        if charName and charName ~= ""  and not tContains(POC.POUI.AutoComplete["Character"], charName) then
-            tinsert(POC.POUI.AutoComplete["Character"], charName)
-        end
         
         local now = GetTime()
         if POI.LastVersionCheck and POI.LastVersionCheck > now-2 then return end -- don't let user spam requests
@@ -537,6 +532,20 @@ function POI:ExportCompPopup()
     getmetatable(popup.comp_export_text_box.editbox).__index.HighlightText(popup.comp_export_text_box.editbox) -- need this bullshit because its not exposed in the API
 
     return popup
+end
+
+function POI:GetOnlineGuildNames()
+    if not IsInGuild() then return {} end
+    local names = {}
+    local numTotalMembers = GetNumGuildMembers()
+    for i = 1, numTotalMembers do
+        local name, rank, rankIndex, level, class, zone, note, officernote, isOnline = GetGuildRosterInfo(i)
+        if name and isOnline and rankIndex <= 5 then
+            name = name:gsub("-.*", "") -- remove realm name
+            tinsert(names, name)
+        end
+    end
+    return names
 end
 
 function POAPI:DisplayText(text, duration)

@@ -1,6 +1,6 @@
 # P1Companion
 
-## [v1.1.0](https://github.com/Project-One-Developers/project-one-companion-addon/tree/v1.1.0) (2025-08-05)
-[Full Changelog](https://github.com/Project-One-Developers/project-one-companion-addon/compare/v1.0.6...v1.1.0) [Previous Releases](https://github.com/Project-One-Developers/project-one-companion-addon/releases)
+## [v2.1.1](https://github.com/Project-One-Developers/project-one-companion-addon/tree/v2.1.1) (2025-09-16)
+[Full Changelog](https://github.com/Project-One-Developers/project-one-companion-addon/compare/v2.1.0...v2.1.1) [Previous Releases](https://github.com/Project-One-Developers/project-one-companion-addon/releases)
 
-- feat: 11.2 wow release  
+- fix: more "forgiving" time calculation  
