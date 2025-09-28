@@ -11,6 +11,8 @@ SlashCmdList["POUI"] = function(msg)
         POI:ExportLootsPopup(100)
     elseif msg == "simc" then
         POI:GetSimc()
+    elseif msg == "weekly" then
+        POI:GetWeeklyRewards()
     elseif msg == "display" then
         POAPI:DisplayText("Display text", 8)
     elseif msg == "debug" then

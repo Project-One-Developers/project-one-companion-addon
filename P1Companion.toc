@@ -21,6 +21,7 @@ Functions.lua
 Comms.lua
 EventHandler.lua
 VersionCheck.lua
+Const.lua
 
 # UI
 P1UI.lua

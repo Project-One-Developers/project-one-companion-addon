@@ -2,9 +2,8 @@ local _, POI = ... -- Internal namespace
 local AceComm = LibStub("AceComm-3.0")
 local LibSerialize = LibStub("LibSerialize")
 local LibDeflate = LibStub("LibDeflate")
-local allowedcomms = {
-    ["POI_NICKNAMES_COMMS"] = true,
-    ["POI_NICKNAMES_SYNC"] = true,
+local allowedGuildComms = {
+    ["POI_VERSION_REQUEST"] = true,
 }
 
 local del = ":"
@@ -36,8 +35,8 @@ function POI:Broadcast(event, channel, ...) -- using internal broadcast function
             message = string.format("%s"..del.."%s(%s)", message, tostring(functionArg), argType)
         end
     end
-    if channel == "WHISPER" then -- create "fake" whisper addon msg that actually just uses RAID instead and will be checked on receive
-        AceComm:SendCommMessage("POI_WHISPER", message, "RAID")
+    if channel == "WHISPER" then -- create "fake" whisper addon msg that actually just uses GUILD instead and will be checked on receive
+        AceComm:SendCommMessage("POI_WHISPER", message, "GUILD")
     else
         AceComm:SendCommMessage("POI_MSG", message, channel)
     end
@@ -46,9 +45,11 @@ end
 local function ReceiveComm(text, chan, sender, whisper, internal)
     local argTable = {strsplit(del, text)}
     local event = argTable[1]
-    if (UnitExists(sender) and (UnitInRaid(sender) or UnitInParty(sender))) or (chan == "GUILD" and allowedcomms[event]) then -- block addon msg's from outside the raid, only exception being a the guild nickname comms. 
+    if (UnitExists(sender) and (UnitInRaid(sender) or UnitInParty(sender))) or (chan == "GUILD" and allowedGuildComms[event]) then -- block addon msg's from outside the raid, only exception being the guild nickname comms. 
         local formattedArgTable = {}
         table.remove(argTable, 1)
+        
+        -- if comm is tagged as "whisper" then check if the whisper target is actually yourself, otherwise ignore the message
         if whisper then
             local target, argType = argTable[2]:match("(.*)%((%a+)%)") -- initially first entry is event, 2nd the unitid of the sender and 3rd the whisper target but we already removed first table entry
             if not (UnitIsUnit("player", target)) then
@@ -65,7 +66,7 @@ local function ReceiveComm(text, chan, sender, whisper, internal)
                 argValue = tonumber(argValue)
                 tonext = nil
             elseif argType == "boolean" then
-                argValue = argValue == "true"
+                argValue = argValue == "true" or false
                 tonext = nil
             elseif argType == "table" then
                 argValue = LibDeflate:DecodeForWoWAddonChannel(argValue)
@@ -78,7 +79,7 @@ local function ReceiveComm(text, chan, sender, whisper, internal)
                 end
                 tonext = nil
             end
-            if argValue and argType then
+            if (argValue or argValue == false) and argType then
                 if argValue == "" then
                     table.insert(formattedArgTable, false)
                 else

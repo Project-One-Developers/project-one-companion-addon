@@ -62,5 +62,6 @@
         "ReloadUI",
         "GameTooltip_ShowCompareItem",
         "GameTooltip_HideShoppingTooltips"
-    ]
+    ],
+    "Lua.type.weakUnionCheck": true
 }

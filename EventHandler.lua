@@ -35,15 +35,15 @@ function POI:EventHandler(e, wowevent, internal, ...) -- internal checks whether
         end
     elseif e == "POI_VERSION_CHECK" and (internal or POC.Settings["Debug"]) then
         if WeakAuras.CurrentEncounter then return end
-        local unit, ver, duplicate = ...        
-        POI:VersionResponse({name = UnitName(unit), version = ver, duplicate = duplicate})
+        local unit, simc, vault, currencies = ...        
+        POI:VersionResponse({name = UnitName(unit), simc = simc, vault = vault, currencies = currencies})
     elseif e == "POI_VERSION_REQUEST" and (internal or POC.Settings["Debug"]) then
         if WeakAuras.CurrentEncounter then return end
-        local unit, type, name = ...        
+        local unit, type = ...        
         if UnitExists(unit) and UnitIsUnit("player", unit) then return end -- don't send to yourself
         if (GetGuildInfo(unit) == GetGuildInfo("player")) then -- only accept this from same guild to prevent abuse
-            local u, ver, duplicate = POI:GetVersionNumber(type, name, unit)
-            POI:Broadcast("POI_VERSION_CHECK", "WHISPER", unit, ver, duplicate)
+            local simc, vault, currencies = POI:GetVersionNumber(type)
+            POI:Broadcast("POI_VERSION_CHECK", "WHISPER", unit, simc, vault, currencies)
         end
     end
 end

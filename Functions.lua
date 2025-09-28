@@ -42,7 +42,6 @@ function POI:GetUnitGuildInfo(unitName)
 end
 
 function POAPI:Shorten(unit, num, role, AddonName, combined) -- Returns color coded Name/Nickname
-    POI:Print("Shorten", unit)    
     local classFile = unit and select(2, UnitClass(unit)) or select(11, POI:GetUnitGuildInfo(unit))
     if role then -- create role icon if requested
         local specid = 0
@@ -169,6 +168,8 @@ function AsyncHideSimcFrame()
     end)
 end
 
+-- Simc wrapping
+
 function POI:GetSimc()
     if not C_AddOns.IsAddOnLoaded("Simulationcraft") then
         print("Addon Simulationcraft is disabled, can't read the profile")
@@ -198,4 +199,62 @@ function POI:GetSimc()
 	local simc = SimcEditBox and SimcEditBox.GetText and SimcEditBox:GetText() or "Error during reading"
     --POI.Print("Simc profile generated:", simc)
     return simc
+end
+
+-- player currency
+function POI:GetUpgradeCurrencies()
+    local upgradeCurrencies = {}
+    for currencyId, currencyName in pairs(POI.UpgradeCurrencies) do
+        local currencyInfo = C_CurrencyInfo.GetCurrencyInfo(currencyId)
+        --POI:Print("Currency info", currencyInfo)
+        if currencyInfo then
+            upgradeCurrencies[currencyId] = {}
+            upgradeCurrencies[currencyId].name = currencyName
+            upgradeCurrencies[currencyId].currencyID = currencyInfo.currencyID
+            upgradeCurrencies[currencyId].quantity = currencyInfo.quantity
+            upgradeCurrencies[currencyId].maxQuantity = currencyInfo.maxQuantity
+            upgradeCurrencies[currencyId].iconFileID = currencyInfo.iconFileID
+            upgradeCurrencies[currencyId].itemLink = C_CurrencyInfo.GetCurrencyLink(currencyInfo.currencyID)
+        end
+    end
+    return upgradeCurrencies
+end
+
+-- player weekly reward
+function POI:GetWeeklyRewards()
+    local WeeklyRewards = _G.C_WeeklyRewards
+    local res = {}
+
+    POI:Print("Weekly reward", WeeklyRewards)
+
+    if not WeeklyRewards then
+        POI:Print("WeeklyRewards not available")
+        return res
+    end
+
+    if WeeklyRewards:HasAvailableRewards() then
+        if not WeeklyRewards:AreRewardsForCurrentRewardPeriod() then
+            POI:Print("WeeklyRewards not from this week")
+            return res
+        end
+        -- Weekly reward not yet generated/interacted
+        if not WeeklyRewards:HasGeneratedRewards() then
+            POI:Print("WeeklyRewards not opened yet", WeeklyRewards)
+            return res
+        end
+        local activities = WeeklyRewards.GetActivities()
+        for _, activityInfo in ipairs(activities) do
+            for _, rewardInfo in ipairs(activityInfo.rewards) do
+                local _, _, _, itemEquipLoc = C_Item.GetItemInfoInstant(rewardInfo.id)
+                if rewardInfo.type == Enum.CachedRewardType.Item and itemEquipLoc and itemEquipLoc ~= "INVTYPE_NON_EQUIP_IGNORE" then
+                    POI:Print("Reward info", rewardInfo,itemEquipLoc )
+                    table.insert(res, rewardInfo)
+                end
+            end
+        end
+    else
+        POI:Print("WeeklyRewards already picked")
+        return "ALREADY_PICKED"
+    end
+    return res
 end
