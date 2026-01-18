@@ -18,6 +18,7 @@ function POI:Broadcast(event, channel, ...) -- using internal broadcast function
     local unitID = UnitInRaid("player") and "raid"..UnitInRaid("player") or UnitName("player")
     message = string.format("%s"..del.."%s(%s)", message, unitID, "string")
 
+
     for i = 1, argCount do
         local functionArg = argTable[i]
         local argType = type(functionArg)
@@ -93,7 +94,6 @@ local function ReceiveComm(text, chan, sender, whisper, internal)
             end
         end
         POI:EventHandler(event, false, internal, unpack(formattedArgTable))
-        WeakAuras.ScanEvents(event, unpack(formattedArgTable))
     end
 end
 

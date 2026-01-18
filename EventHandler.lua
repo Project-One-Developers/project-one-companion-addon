@@ -15,15 +15,59 @@ function POI:EventHandler(e, wowevent, internal, ...) -- internal checks whether
             if not POC then POC = {} end
             if not POC.POUI then POC.POUI = {scale = 1} end
             if not POC.Settings then POC.Settings = {} end
-            POC.Settings["WeakAurasImportAccept"] = POC.Settings["WeakAurasImportAccept"] or 1 -- guild default
             if POC.Settings["TTS"] == nil then POC.Settings["TTS"] = true end
             POC.Settings["TTSVolume"] = POC.Settings["TTSVolume"] or 50
             POC.Settings["TTSVoice"] = POC.Settings["TTSVoice"] or 2
             POC.Settings["Minimap"] = POC.Settings["Minimap"] or {hide = false}
-            POC.Settings["AutoUpdateWA"] = POC.Settings["AutoUpdateWA"] or false
             POC.Settings["Debug"] = POC.Settings["Debug"] or false
             POC.Settings["DebugLogs"] = POC.Settings["DebugLogs"] or false
-            POC.Settings["MemeBreakTimer"] = POC.Settings["MemeBreakTimer"] or true
+            if not POC.Settings.TrinketReminder then
+                POC.Settings.TrinketReminder = {
+                    enabled = true,
+                    duration = 5,
+                    scale = 1.2,
+                    playSound = true,
+                    anchor = {
+                        point = "CENTER",
+                        relativePoint = "CENTER",
+                        x = 0,
+                        y = 200,
+                    },
+                }
+            end
+            -- Also add default anchor if upgrading existing settings
+            if not POC.Settings.TrinketReminder.anchor then
+                POC.Settings.TrinketReminder.anchor = {
+                    point = "CENTER",
+                    relativePoint = "CENTER",
+                    x = 0,
+                    y = 200,
+                }
+            end
+            if not POC.Settings.PotionReminder then
+                POC.Settings.PotionReminder = {
+                    enabled = true,
+                    duration = 5,
+                    scale = 1.2,
+                    playSound = true,
+                    requireBloodlust = false,
+                    hasteThreshold = 25,
+                    anchor = {
+                        point = "CENTER",
+                        relativePoint = "CENTER",
+                        x = 0,
+                        y = 150,
+                    },
+                }
+            end
+            if not POC.Settings.PotionReminder.anchor then
+                POC.Settings.PotionReminder.anchor = {
+                    point = "CENTER",
+                    relativePoint = "CENTER",
+                    x = 0,
+                    y = 150,
+                }
+            end
         end
     elseif e == "PLAYER_ENTERING_WORLD" and wowevent then
         --POI:AutoImport()
@@ -34,11 +78,11 @@ function POI:EventHandler(e, wowevent, internal, ...) -- internal checks whether
             print("|cFF00FFFFPOC|r Debug mode is currently enabled. Please disable it with '/ns debug' unless you are specifically testing something.")
         end
     elseif e == "POI_VERSION_CHECK" and (internal or POC.Settings["Debug"]) then
-        if WeakAuras.CurrentEncounter then return end
+        if self:Restricted() then return end
         local unit, simc, vault, currencies = ...        
         POI:VersionResponse({name = UnitName(unit), simc = simc, vault = vault, currencies = currencies})
     elseif e == "POI_VERSION_REQUEST" and (internal or POC.Settings["Debug"]) then
-        if WeakAuras.CurrentEncounter then return end
+        if self:Restricted() then return end
         local unit, type = ...        
         if UnitExists(unit) and UnitIsUnit("player", unit) then return end -- don't send to yourself
         if (GetGuildInfo(unit) == GetGuildInfo("player")) then -- only accept this from same guild to prevent abuse

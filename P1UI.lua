@@ -2,7 +2,6 @@ local _, POI = ... -- Internal namespace
 local DF = _G["DetailsFramework"]
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LDB and LibStub("LibDBIcon-1.0")
-local WA = _G["WeakAuras"]
 
 local window_width = 900
 local window_height = 515
@@ -10,8 +9,7 @@ local expressway = [[Interface\AddOns\P1Companion\Media\Fonts\Expressway.TTF]]
 
 local TABS_LIST = {
     { name = "General",   text = "General" },
-    { name = "Versions",  text = "Simulations" },
-    { name = "WeakAuras", text = "WeakAuras(WIP)" },
+    { name = "Versions",  text = "Guild Info" },
 }
 local authorsString = "By Shant"
 
@@ -34,7 +32,6 @@ POUI.StatusBar.discordTextEntry:SetText("https://discord.gg/RfhtBRR3yW")
 POUI.OptionsChanged = {
     ["general"] = {},
     ["versions"] = {},
-    ["weakauras"] = {},
 }
 
 -- version check ui
@@ -386,7 +383,6 @@ function POUI:Init()
 
     local general_tab = tabContainer:GetTabFrameByName("General")
     local versions_tab = tabContainer:GetTabFrameByName("Versions")
-    local weakaura_tab = tabContainer:GetTabFrameByName("WeakAuras")
 
     -- generic text display
     local generic_display = CreateFrame("Frame", "POUIGenericDisplay", UIParent, "BackdropTemplate")
@@ -404,9 +400,6 @@ function POUI:Init()
     end
     local versions_callback = function()
         wipe(POUI.OptionsChanged["versions"])
-    end
-    local weakauras_callback = function()
-        wipe(POUI.OptionsChanged["weakauras"])
     end
 
     -- options
@@ -436,73 +429,12 @@ function POUI:Init()
             end,
         },
 
-        {
-            type = "breakline"
-        },   
-
-        { type = "label", get = function() return "Meme Images" end,     text_template = DF:GetTemplate("font", "ORANGE_FONT_TEMPLATE") },
-        {
-            type = "toggle",
-            boxfirst = true,
-            name = "Break timer",
-            desc = "Enable Meme images during break timer",
-            get = function() return POC.Settings["MemeBreakTimer"] end,
-            set = function(self, fixedparam, value)
-                POUI.OptionsChanged.general["MEME_BREAK_TIMER"] = true
-                POC.Settings["MemeBreakTimer"] = value
-            end,
-        },  
     }
-
-    local weakaura_options1_table = {
-        {
-            type = "label",
-            get = function() return "Raid Auras" end,
-            text_template = DF:GetTemplate("font", "ORANGE_FONT_TEMPLATE"),
-        },
-        {
-            type = "button",
-            name = "Manaforge Raid WA",
-            desc = "Import Manaforge Omega WeakAuras",            
-            func = function(self)
-                --ImportWeakAura("raid_weakaura_manaforge")
-            end,
-            nocombat = true,
-            spacement = true,
-        },
-        {
-            type = "breakline"
-        },
-
-        {
-            type = "label",
-            get = function() return "WeakAura Updates" end,
-            text_template = DF:GetTemplate("font", "ORANGE_FONT_TEMPLATE"),
-        },
-
-        {
-            type = "toggle",
-            boxfirst = true,
-            name = "Auto Update WA",
-            desc = "Automatically update WeakAuras. (Requires WeakAuras Companion Desktop Application)",
-            get = function() return POC.Settings["AutoUpdateWA"] end,
-            set = function(self, fixedparam, value)
-                POC.Settings["AutoUpdateWA"] = value
-            end,
-        },
-        {
-            type = "breakline"
-        },
-    }
-
 
     -- Build options menu for each tab
     DF:BuildMenu(general_tab, general_options1_table, 10, -100, window_height - 10, false, options_text_template,
         options_dropdown_template, options_switch_template, true, options_slider_template, options_button_template,
         general_callback)
-    DF:BuildMenu(weakaura_tab, weakaura_options1_table, 10, -100, window_height - 10, false, options_text_template,
-        options_dropdown_template, options_switch_template, true, options_slider_template, options_button_template,
-        weakauras_callback)
 
     -- Build version check UI
     POUI.version_scrollbox = BuildVersionCheckUI(versions_tab)
