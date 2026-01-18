@@ -1,11 +1,10 @@
-## Interface: 110200
+## Interface: 120000,110200
 
 ## Title: P1Companion
 ## Version: 2.1.0
 ## IconTexture: Interface\Addons\P1Companion\Media\P1Logo.tga
 ## Author: Shant
 ## DefaultState: Enable
-## Dependencies: MythicDungeonTools
 ## SavedVariables: POC
 ## Category: Project One
 ## X-Curse-Project-ID: 1224828
