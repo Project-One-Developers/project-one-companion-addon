@@ -131,28 +131,22 @@ function POI:Utf8Sub(str, startChar, endChar)
 end
 
 function POI:GetLootHistoryString(limit)
-    if not VMRT then
-        return "Please Enable Method Raid Tools"
-    end
-    if not VMRT.LootHistory or not VMRT.LootHistory.list then
-        return "Please Enable \"Loot History\" module in Method Raid Tools"
+    if not POC.LootHistory or not POC.LootHistory.list then
+        return "Loot History is not initialized. Enable it in the Loot tab."
     end
 
     local result = ""
     local count = 0
-    local total = #VMRT.LootHistory.list
+    local total = #POC.LootHistory.list
     local maxAllowed = 150
 
-    -- If no limit specified, set to maxAllowed
     if not limit or limit <= 0 then
-        POI.Print("GetLootHistoryString: set amount to ", maxAllowed)
         limit = maxAllowed
     end
     limit = math.min(limit, total)
 
-    -- Start from the most recent item and count down
     for i = total, 1, -1 do
-        local entry = VMRT.LootHistory.list[i]
+        local entry = POC.LootHistory.list[i]
         result = result .. entry .. "\n"
         count = count + 1
         if count >= limit then

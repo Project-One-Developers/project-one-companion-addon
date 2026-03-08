@@ -21,7 +21,9 @@ Comms.lua
 EventHandler.lua
 VersionCheck.lua
 Const.lua
+LootHistory.lua
 
 # UI
+LootHistoryUI.lua
 P1UI.lua
 SlashCommands.lua

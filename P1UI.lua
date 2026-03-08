@@ -10,6 +10,7 @@ local expressway = [[Interface\AddOns\P1Companion\Media\Fonts\Expressway.TTF]]
 local TABS_LIST = {
     { name = "General",   text = "General" },
     { name = "Versions",  text = "Guild Info" },
+    { name = "Loot",      text = "Loot" },
 }
 local authorsString = "By Shant"
 
@@ -381,8 +382,11 @@ function POUI:Init()
     -- tabContainer:SetPoint("TOP", POUI, "TOP", 0, 0)
     tabContainer:SetPoint("CENTER", POUI, "CENTER", 0, 0)
 
+    POUI.tabContainer = tabContainer
+
     local general_tab = tabContainer:GetTabFrameByName("General")
     local versions_tab = tabContainer:GetTabFrameByName("Versions")
+    local loot_tab = tabContainer:GetTabFrameByName("Loot")
 
     -- generic text display
     local generic_display = CreateFrame("Frame", "POUIGenericDisplay", UIParent, "BackdropTemplate")
@@ -438,6 +442,9 @@ function POUI:Init()
 
     -- Build version check UI
     POUI.version_scrollbox = BuildVersionCheckUI(versions_tab)
+
+    -- Build loot history UI
+    POI.LootHistoryUI:BuildLootTab(loot_tab)
 
     -- Version Number in status bar
     local versionTitle = C_AddOns.GetAddOnMetadata("P1Companion", "Title")

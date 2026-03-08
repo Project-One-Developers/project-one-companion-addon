@@ -8,7 +8,10 @@ SlashCmdList["POUI"] = function(msg)
         wipe(POC)
         ReloadUI()
     elseif msg == "loot" then
-        POI:ExportLootsPopup(100)
+        POI.POUI:Show()
+        if POI.POUI.tabContainer then
+            POI.POUI.tabContainer:SelectTabByName("Loot")
+        end
     elseif msg == "simc" then
         POI:GetSimc()
     elseif msg == "weekly" then

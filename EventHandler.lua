@@ -3,6 +3,11 @@ local f = CreateFrame("Frame")
 f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f:RegisterEvent("BOSS_KILL")
+f:RegisterEvent("ENCOUNTER_LOOT_RECEIVED")
+f:RegisterEvent("LOOT_HISTORY_UPDATE_ENCOUNTER")
+f:RegisterEvent("LOOT_HISTORY_UPDATE_DROP")
+f:RegisterEvent("ENCOUNTER_END")
 
 f:SetScript("OnEvent", function(self, e, ...)
     POI:EventHandler(e, true, false, ...)
@@ -68,6 +73,27 @@ function POI:EventHandler(e, wowevent, internal, ...) -- internal checks whether
                     y = 150,
                 }
             end
+
+            -- Loot History saved variables
+            if not POC.LootHistory then
+                POC.LootHistory = {}
+            end
+            POC.LootHistory.list = POC.LootHistory.list or {}
+            POC.LootHistory.bossNames = POC.LootHistory.bossNames or {}
+            POC.LootHistory.instanceNames = POC.LootHistory.instanceNames or {}
+            if POC.LootHistory.enabled == nil then
+                POC.LootHistory.enabled = true
+            end
+
+            -- Auto-migrate from MRT if available
+            if POI.LootHistory then
+                POI.LootHistory:MigrateFromMRT()
+            end
+        end
+    elseif (e == "BOSS_KILL" or e == "ENCOUNTER_LOOT_RECEIVED" or e == "LOOT_HISTORY_UPDATE_ENCOUNTER"
+        or e == "LOOT_HISTORY_UPDATE_DROP" or e == "ENCOUNTER_END") and wowevent then
+        if POI.LootHistory then
+            POI.LootHistory:HandleEvent(e, ...)
         end
     elseif e == "PLAYER_ENTERING_WORLD" and wowevent then
         --POI:AutoImport()

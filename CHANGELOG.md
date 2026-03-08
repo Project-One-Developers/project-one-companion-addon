@@ -1,6 +1,8 @@
 # P1Companion
 
-## [v2.1.1](https://github.com/Project-One-Developers/project-one-companion-addon/tree/v2.1.1) (2025-09-16)
-[Full Changelog](https://github.com/Project-One-Developers/project-one-companion-addon/compare/v2.1.0...v2.1.1) [Previous Releases](https://github.com/Project-One-Developers/project-one-companion-addon/releases)
+## [v2.2.1](https://github.com/Project-One-Developers/project-one-companion-addon/tree/v2.2.1) (2026-01-19)
+[Full Changelog](https://github.com/Project-One-Developers/project-one-companion-addon/compare/v2.2.0...v2.2.1) [Previous Releases](https://github.com/Project-One-Developers/project-one-companion-addon/releases)
 
-- fix: more "forgiving" time calculation  
+- refactor: removed ignored folder  
+- fix: bump LibDFramework for 12.0  
+- fix: add standalone LibSerialize in case of no addon that provide it  
