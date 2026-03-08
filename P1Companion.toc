@@ -1,4 +1,4 @@
-## Interface: 120000,110200
+## Interface: 120001, 120000
 
 ## Title: P1Companion
 ## Version: 2.1.0
