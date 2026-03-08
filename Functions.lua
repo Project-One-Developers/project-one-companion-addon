@@ -205,7 +205,12 @@ function POI:GetSimc()
         print("Addon Simulationcraft is disabled, can't read the profile")
         return "empty"
     end
-    Simulationcraft = LibStub("AceAddon-3.0"):GetAddon("Simulationcraft")
+    local AceAddon = LibStub("AceAddon-3.0", true)
+    if not AceAddon then
+        print("AceAddon-3.0 not available, can't access Simulationcraft")
+        return "empty"
+    end
+    Simulationcraft = AceAddon:GetAddon("Simulationcraft")
     
     -- inject hook
     if not POI.SimcHook then

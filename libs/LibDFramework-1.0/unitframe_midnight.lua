@@ -5,7 +5,7 @@ if (not detailsFramework or not DetailsFrameworkCanLoad) then
 	return
 end
 
-if detailsFramework.IsMidnightWow() then return end
+if not detailsFramework.IsMidnightWow() then return end
 
 local _
 --lua locals
@@ -26,6 +26,8 @@ end
 
 local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
+local UnitHealthMissing = UnitHealthMissing
+local UnitHealthPercent = UnitHealthPercent
 local UnitGetIncomingHeals = UnitGetIncomingHeals
 local UnitGetTotalHealAbsorbs = UnitGetTotalHealAbsorbs
 local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
@@ -47,6 +49,7 @@ local IS_WOW_PROJECT_MAINLINE = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
 local IS_WOW_PROJECT_NOT_MAINLINE = WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
 local IS_WOW_PROJECT_CLASSIC_ERA = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 local IS_WOW_PROJECT_AT_LEAST_CLASSIC_MOP = IS_WOW_PROJECT_MAINLINE or (ClassicExpansionAtLeast and LE_EXPANSION_MISTS_OF_PANDARIA and ClassicExpansionAtLeast(LE_EXPANSION_MISTS_OF_PANDARIA))
+local IS_MIDNIGHT_PRE_PATCH = detailsFramework.Toc == 120000
 
 local CastInfo = detailsFramework.CastInfo
 
@@ -87,7 +90,6 @@ local cleanfunction = function() end
 ---@class df_healthbar : statusbar, df_scripthookmixin, df_statusbarmixin
 ---@field unit unit
 ---@field displayedUnit unit
----@field oldHealth number
 ---@field currentHealth number
 ---@field currentHealthMax number
 ---@field nextShieldHook number
@@ -155,6 +157,7 @@ local cleanfunction = function() end
 		ShowHealingPrediction = true, --when casting a healing pass, show the amount of health that spell will heal
 		ShowShields = true, --indicator of the amount of damage absortion the unit has
 		DontSetStatusBarTexture = false,
+		AnimateHealth = true,
 
 		--appearance
 		BackgroundColor = detailsFramework:CreateColorTable (.2, .2, .2, .8),
@@ -186,8 +189,10 @@ local cleanfunction = function() end
 
 			--register events
 			if (unit) then
-				self.currentHealth = UnitHealth(unit) or 0
-				self.currentHealthMax = UnitHealthMax(unit) or 0
+				--self.currentHealth = UnitHealth(unit)
+				--self.currentHealthMax = UnitHealthMax(unit)
+				--self.currentHealthMissing = UnitHealthMissing(unit, true)
+				--self.currentHealthPercent = UnitHealthPercent(unit, true, CurveConstants.ScaleTo100)
 
 				for _, eventTable in ipairs(self.HealthBarEvents) do
 					local event = eventTable[1]
@@ -216,6 +221,7 @@ local cleanfunction = function() end
 					end
 					self.shieldAbsorbIndicator:Hide()
 					self.shieldAbsorbGlow:Hide()
+					self.shieldAbsorbIndicatorBar:SetAlpha(0)
 				end
 
 				--set scripts
@@ -225,7 +231,10 @@ local cleanfunction = function() end
 					self:SetScript("OnUpdate", self.OnTick)
 				end
 
+				local animCache = self.Settings.AnimateHealth
+				self.Settings.AnimateHealth = false -- update instantly on setting unit
 				self:PLAYER_ENTERING_WORLD(self.unit, self.displayedUnit)
+				self.Settings.AnimateHealth = animCache
 			else
 				--remove all registered events
 				for _, eventTable in ipairs(self.HealthBarEvents) do
@@ -282,15 +291,89 @@ local cleanfunction = function() end
 			eventFunc(self, ...)
 		end
 	end
+	
+	healthBarMetaFunctions.UpdateAllHealth = function(self, updateMaxHealth)
+		
+		if IS_MIDNIGHT_PRE_PATCH then
+			self:UpdateMaxHealth()
+			self:UpdateHealth()
+			self:UpdateHealPrediction()
+			return
+		end
+	
+		local calculator = self.healCalculator
+		UnitGetDetailedHealPrediction(self.displayedUnit, nil, calculator)
+		
+		--calculator:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.Default)
+		calculator:SetMaximumHealthMode(self.Settings.ShowShields and Enum.UnitMaximumHealthMode.WithAbsorbs or Enum.UnitMaximumHealthMode.Default)
+		self.currentHealthPercent = calculator:EvaluateCurrentHealthPercent(CurveConstants.ScaleTo100)
+		self.currentHealthMissingPercent = calculator:GetMissingHealthPercent()
+		self.currentHealth = calculator:GetCurrentHealth()
+		self.currentHealthMissing = calculator:GetMissingHealth()
+		self.currentHealthMax = calculator:GetMaximumDamageAbsorbs() --calculator:GetMaximumHealth()
+		
+		--switch
+		--calculator:SetMaximumHealthMode(self.Settings.ShowShields and Enum.UnitMaximumHealthMode.WithAbsorbs or Enum.UnitMaximumHealthMode.Default)
+		
+		self.currentHealthPercentWithAbsorb = calculator:EvaluateCurrentHealthPercent(CurveConstants.ScaleTo100)
+		self.currentHealthMissingPercentWithAbsorb = calculator:GetMissingHealthPercent()
+		self.currentHealthMissingWithAbsorb = calculator:GetMissingHealth()
+		self.currentHealthMaxWithAbsorb = calculator:GetMaximumDamageAbsorbs() --calculator:GetMaximumHealth()
+		
+		self:SetMinMaxValues(0, self.currentHealthMaxWithAbsorb, Enum.StatusBarInterpolation.Immediate)
+
+		self:SetValue(self.currentHealth, (updateMaxHealth or not self.Settings.AnimateHealth) and Enum.StatusBarInterpolation.Immediate or Enum.StatusBarInterpolation.ExponentialEaseOut)
+		
+		if (self.Settings.ShowShields) then
+			local absorb, clamp = calculator:GetDamageAbsorbs()
+			
+			--damage absorbs
+			local unitDamageAbsorb = calculator:GetMaximumDamageAbsorbs() -- this is full life with all?
+			self.currentAbsorb = unitDamageAbsorb
+			self.currentAbsorbClamped = absorb
+			self.currentAbsorbIsClamped = clamp
+
+			self.shieldAbsorbIndicatorBar:SetAlpha(unitDamageAbsorb)
+			
+			self.shieldAbsorbGlow:Show()
+			self.shieldAbsorbGlow:SetAlphaFromBoolean(clamp, 1, 0)
+			
+			self.shieldAbsorbIndicatorBar:SetMinMaxValues(0, self.currentHealthMaxWithAbsorb, self.Settings.AnimateHealth and Enum.StatusBarInterpolation.ExponentialEaseOut or Enum.StatusBarInterpolation.Immediate) --TODO
+			self.shieldAbsorbIndicatorBar:SetValue(absorb)
+			
+			self.nextShieldHook = self.nextShieldHook or 0
+			if (GetTime() >= self.nextShieldHook) then
+				self:RunHooksForWidget("OnAbsorbOverflow", self, self.displayedUnit, -1)
+				self.nextShieldHook = GetTime() + 0.2
+			end
+		end
+		
+		if updateMaxHealth then
+			if (self.OnHealthMaxChange) then --direct call
+				self.OnHealthMaxChange(self, self.displayedUnit)
+			else
+				self:RunHooksForWidget("OnHealthMaxChange", self, self.displayedUnit)
+			end
+		end
+
+		if (self.OnHealthChange) then --direct call
+			self.OnHealthChange(self, self.displayedUnit)
+		else
+			self:RunHooksForWidget("OnHealthChange", self, self.displayedUnit)
+		end
+	end
 
 	--when the unit max health is changed
 	healthBarMetaFunctions.UpdateMaxHealth = function(self)
+		if not IS_MIDNIGHT_PRE_PATCH then
+			self:UpdateAllHealth(true)
+			return
+		end
 		local maxHealth = UnitHealthMax(self.displayedUnit)
-		self:SetMinMaxValues(0, maxHealth)
+		self:SetMinMaxValues(0, maxHealth, Enum.StatusBarInterpolation.Immediate)
 		self.currentHealthMax = maxHealth
-		self.currentHealthMissing = maxHealth - (self.currentHealth or 0)
-		self.currentHealthPercent = (self.currentHealth or maxHealth) / maxHealth * 100
-		self.currentHealthPercentMissing = 100 - self.currentHealthPercent
+		self.currentHealthMissing = UnitHealthMissing(self.displayedUnit, true)
+		self.currentHealthPercent = UnitHealthPercent(self.displayedUnit, true, CurveConstants.ScaleTo100)
 
 		if (self.OnHealthMaxChange) then --direct call
 			self.OnHealthMaxChange(self, self.displayedUnit)
@@ -300,17 +383,20 @@ local cleanfunction = function() end
 	end
 
 	healthBarMetaFunctions.UpdateHealth = function(self)
+		if not IS_MIDNIGHT_PRE_PATCH then
+			self:UpdateAllHealth(true)
+			return
+		end
 		-- update max health regardless to avoid weird wrong values on UpdateMaxHealth sometimes
 		-- local maxHealth = UnitHealthMax(self.displayedUnit)
 		-- self:SetMinMaxValues(0, maxHealth)
 		-- self.currentHealthMax = maxHealth
 
-		self.oldHealth = self.currentHealth
 		local health = UnitHealth(self.displayedUnit)
 		self.currentHealth = health
-		self.currentHealthMissing = (self.currentHealthMax or health) - (health or 0)
-		self.currentHealthPercent = (health or self.currentHealthMax) / (self.currentHealthMax or health)  * 100
-		PixelUtil.SetStatusBarValue(self, health)
+		self.currentHealthMissing = UnitHealthMissing(self.displayedUnit, true)
+		self.currentHealthPercent = UnitHealthPercent(self.displayedUnit, true, CurveConstants.ScaleTo100)
+		self:SetValue(health, self.Settings.AnimateHealth and Enum.StatusBarInterpolation.ExponentialEaseOut or Enum.StatusBarInterpolation.Immediate)
 
 		if (self.OnHealthChange) then --direct call
 			self.OnHealthChange(self, self.displayedUnit)
@@ -321,6 +407,41 @@ local cleanfunction = function() end
 
 	--health and absorbs prediction
 	healthBarMetaFunctions.UpdateHealPrediction = function(self)
+		if not IS_MIDNIGHT_PRE_PATCH then
+			self:UpdateAllHealth(true)
+			return
+		end
+		local calculator = self.healCalculator
+		UnitGetDetailedHealPrediction(self.displayedUnit, nil, calculator)
+		--print(self.displayedUnit, UnitHealth(self.displayedUnit), UnitHealthMax(self.displayedUnit), UnitGetTotalAbsorbs(self.displayedUnit), calculator:GetDamageAbsorbs())
+		
+		if (self.Settings.ShowShields) then
+			local absorb, clamp = calculator:GetDamageAbsorbs()
+			
+			--damage absorbs
+			local unitDamageAbsorb = UnitGetTotalAbsorbs (self.displayedUnit)
+			self.currentAbsorb = unitDamageAbsorb
+			self.currentAbsorbClamped = absorb
+			self.currentAbsorbIsClamped = clapmped
+			
+
+			self.shieldAbsorbIndicatorBar:SetAlpha(unitDamageAbsorb)
+			
+			self.shieldAbsorbGlow:Show()
+			self.shieldAbsorbGlow:SetAlphaFromBoolean(clamp, 1, 0)
+			
+			self.shieldAbsorbIndicatorBar:SetMinMaxValues(0, self.currentHealthMax, self.Settings.AnimateHealth and Enum.StatusBarInterpolation.ExponentialEaseOut or Enum.StatusBarInterpolation.Immediate)
+			self.shieldAbsorbIndicatorBar:SetValue(absorb)
+			
+			self.nextShieldHook = self.nextShieldHook or 0
+			if (GetTime() >= self.nextShieldHook) then
+				self:RunHooksForWidget("OnAbsorbOverflow", self, self.displayedUnit, -1)
+				self.nextShieldHook = GetTime() + 0.2
+			end
+		end
+		
+		if true then return end --MIDNIGHT!!
+		
 		local currentHealth = self.currentHealth
 		local currentHealthMax = self.currentHealthMax
 
@@ -335,9 +456,9 @@ local cleanfunction = function() end
 
 		if (self.Settings.ShowHealingPrediction) then
 			--incoming heal on the unit from all sources
-			local unitHealIncoming = UnitGetIncomingHeals and self.displayedUnit and UnitGetIncomingHeals(self.displayedUnit) or 0
+			local unitHealIncoming = UnitGetIncomingHeals and self.displayedUnit and UnitGetIncomingHeals(self.displayedUnit)
 			--heal absorbs
-			local unitHealAbsorb = UnitGetTotalHealAbsorbs and self.displayedUnit and UnitGetTotalHealAbsorbs(self.displayedUnit) or 0
+			local unitHealAbsorb = UnitGetTotalHealAbsorbs and self.displayedUnit and UnitGetTotalHealAbsorbs(self.displayedUnit)
 
 			if (unitHealIncoming > 0) then
 				--calculate what is the percent of health incoming based on the max health the player has
@@ -361,93 +482,54 @@ local cleanfunction = function() end
 			end
 		end
 
-		if (self.Settings.ShowShields and UnitGetTotalAbsorbs) then
-			--damage absorbs
-			local unitDamageAbsorb = self.displayedUnit and UnitGetTotalAbsorbs (self.displayedUnit) or 0
-
-			if (unitDamageAbsorb > 0) then
-				local damageAbsorbPercent = unitDamageAbsorb / currentHealthMax
-				self.shieldAbsorbIndicator:Show()
-				--set the width where the max width size is what is lower: the absorb size or the missing amount of health in the health bar
-				--/dump NamePlate1PlaterUnitFrameHealthBar.shieldAbsorbIndicator:GetSize()
-				self.shieldAbsorbIndicator:SetWidth(max(1, min (width * damageAbsorbPercent, abs(healthPercent - 1) * width)))
-				self.shieldAbsorbIndicator:SetPoint("topleft", self, "topleft", width * healthPercent, 0)
-				self.shieldAbsorbIndicator:SetPoint("bottomleft", self, "bottomleft", width * healthPercent, 0)
-
-				--if the absorb percent pass 100%, show the glow
-				if ((healthPercent + damageAbsorbPercent) > 1) then
-					self.nextShieldHook = self.nextShieldHook or 0
-
-					if (GetTime() >= self.nextShieldHook) then
-						self:RunHooksForWidget("OnAbsorbOverflow", self, self.displayedUnit, healthPercent + damageAbsorbPercent - 1)
-						self.nextShieldHook = GetTime() + 0.2
-					end
-
-					self.shieldAbsorbGlow:Show()
-				else
-					self.shieldAbsorbGlow:Hide()
-					if (self.nextShieldHook) then
-						self:RunHooksForWidget("OnAbsorbOverflow", self, self.displayedUnit, 0)
-						self.nextShieldHook = nil
-					end
-				end
-			else
-				self.shieldAbsorbIndicator:Hide()
-				self.shieldAbsorbGlow:Hide()
-				if (self.nextShieldHook) then
-					self:RunHooksForWidget("OnAbsorbOverflow", self, self.displayedUnit, 0)
-					self.nextShieldHook = nil
-				end
-			end
-		else
-			self.shieldAbsorbIndicator:Hide()
-			self.shieldAbsorbGlow:Hide()
-			if (self.nextShieldHook) then
-				self:RunHooksForWidget("OnAbsorbOverflow", self, self.displayedUnit, 0)
-				self.nextShieldHook = nil
-			end
-		end
 	end
 
 	--Health Events
 		healthBarMetaFunctions.PLAYER_ENTERING_WORLD = function(self, ...)
-			self:UpdateMaxHealth()
-			self:UpdateHealth()
-			self:UpdateHealPrediction()
+			self:UpdateAllHealth(true)
+			--self:UpdateMaxHealth()
+			--self:UpdateHealth()
+			--self:UpdateHealPrediction()
 		end
 
 		healthBarMetaFunctions.UNIT_HEALTH = function(self, unitId)
-			self:UpdateHealth()
-			self:UpdateHealPrediction()
+			self:UpdateAllHealth(false)
+			--self:UpdateHealth()
+			--self:UpdateHealPrediction()
 		end
 
 		healthBarMetaFunctions.UNIT_MAXHEALTH = function(self, unitId)
-			self:UpdateMaxHealth()
-			self:UpdateHealth()
-			self:UpdateHealPrediction()
+			self:UpdateAllHealth(true)
+			--self:UpdateMaxHealth()
+			--self:UpdateHealth()
+			--self:UpdateHealPrediction()
 		end
 
 		healthBarMetaFunctions.UNIT_HEALTH_FREQUENT = function(self, ...)
-			self:UpdateHealth()
-			self:UpdateHealPrediction()
+			self:UpdateAllHealth(false)
+			--self:UpdateHealth()
+			--self:UpdateHealPrediction()
 		end
 
 		healthBarMetaFunctions.UNIT_HEAL_PREDICTION = function(self, ...)
-			self:UpdateMaxHealth()
-			self:UpdateHealth()
-			self:UpdateHealPrediction()
+			self:UpdateAllHealth(true)
+			--self:UpdateMaxHealth()
+			--self:UpdateHealth()
+			--self:UpdateHealPrediction()
 		end
 
 		healthBarMetaFunctions.UNIT_ABSORB_AMOUNT_CHANGED = function(self, ...)
-			self:UpdateMaxHealth()
-			self:UpdateHealth()
-			self:UpdateHealPrediction()
+			self:UpdateAllHealth(false)
+			--self:UpdateMaxHealth()
+			--self:UpdateHealth()
+			--self:UpdateHealPrediction()
 		end
 
 		healthBarMetaFunctions.UNIT_HEAL_ABSORB_AMOUNT_CHANGED = function(self, ...)
-			self:UpdateMaxHealth()
-			self:UpdateHealth()
-			self:UpdateHealPrediction()
+			self:UpdateAllHealth(false)
+			--self:UpdateMaxHealth()
+			--self:UpdateHealth()
+			--self:UpdateHealPrediction()
 		end
 
 -- ~healthbar
@@ -465,6 +547,9 @@ function detailsFramework:CreateHealthBar(parent, name, settingsOverride)
 			--background
 			healthBar.background = healthBar:CreateTexture(nil, "background")
 			healthBar.background:SetDrawLayer("background", -6)
+			
+			--statusbar texture
+			healthBar.barTexture = healthBar:CreateTexture(nil, "artwork", nil, 1)
 
 			--artwork
 			--healing incoming
@@ -473,14 +558,39 @@ function detailsFramework:CreateHealthBar(parent, name, settingsOverride)
 			--current shields on the unit
 			healthBar.shieldAbsorbIndicator =  healthBar:CreateTexture(nil, "artwork", nil, 3)
 			healthBar.shieldAbsorbIndicator:SetDrawLayer("artwork", 5)
+			
+			healthBar.shieldAbsorbIndicatorBar = CreateFrame("StatusBar", name or (parent:GetName() .. "AbsorbBar"), healthBar, "BackdropTemplate")
+			healthBar.shieldAbsorbIndicatorBar.barTexture = healthBar.shieldAbsorbIndicatorBar:CreateTexture(nil, "artwork", nil, 3)
+			healthBar.shieldAbsorbIndicatorBar:SetStatusBarTexture(healthBar.shieldAbsorbIndicatorBar.barTexture)
+			healthBar.shieldAbsorbIndicatorBar.barTexture:SetTexture([[Interface\RaidFrame\Shield-Fill]])
+			healthBar.shieldAbsorbIndicatorBar:SetPoint ("topleft", healthBar.barTexture, "topright")
+			--healthBar.shieldAbsorbIndicatorBar:SetPoint ("bottomright", healthBar, "bottomright")
+			healthBar.shieldAbsorbIndicatorBar:SetPoint ("bottomleft", healthBar.barTexture, "bottomright")
+			hooksecurefunc(healthBar, 'SetWidth', function(self, w)
+				healthBar.shieldAbsorbIndicatorBar:SetWidth(w)
+			end)
+			hooksecurefunc(healthBar, 'SetSize', function(self, h, w)
+				--healthBar.shieldAbsorbIndicatorBar:SetSize(h, w)
+				healthBar.shieldAbsorbIndicatorBar:SetWidth(w)
+			end)
+			-- not so nice, but works in compatibility
+			healthBar.SetFrameLevelOrig = healthBar.SetFrameLevel
+			healthBar.SetFrameLevel = function(self, level)
+				self:SetFrameLevelOrig(level)
+				self.shieldAbsorbIndicatorBar:SetFrameLevel(level)
+			end
+			healthBar.SetFrameStrataOrig = healthBar.SetFrameStrata
+			healthBar.SetFrameStrata = function(self, strata)
+				self:SetFrameStrataOrig(strata)
+				self.shieldAbsorbIndicatorBar:SetFrameStrata(strata)
+			end
+			
 			--debuff absorbing heal
 			healthBar.healAbsorbIndicator = healthBar:CreateTexture(nil, "artwork", nil, 4)
 			healthBar.healAbsorbIndicator:SetDrawLayer("artwork", 6)
 			--the shield fills all the bar, show that cool glow
 			healthBar.shieldAbsorbGlow = healthBar:CreateTexture(nil, "artwork", nil, 6)
 			healthBar.shieldAbsorbGlow:SetDrawLayer("artwork", 7)
-			--statusbar texture
-			healthBar.barTexture = healthBar:CreateTexture(nil, "artwork", nil, 1)
 		end
 
 	--mixins
@@ -505,6 +615,14 @@ function detailsFramework:CreateHealthBar(parent, name, settingsOverride)
 
 	--hook list
 	healthBar.HookList = detailsFramework.table.copy({}, healthBarMetaFunctions.HookList)
+	
+	--absorb calculator
+	healthBar.healCalculator = CreateUnitHealPredictionCalculator();
+	healthBar.healCalculator:SetDamageAbsorbClampMode(Enum.UnitDamageAbsorbClampMode.MaximumHealth)
+	healthBar.healCalculator:SetHealAbsorbClampMode(Enum.UnitHealAbsorbClampMode.MaximumHealth)
+	healthBar.healCalculator:SetHealAbsorbMode(Enum.UnitHealAbsorbMode.Total)
+	healthBar.healCalculator:SetIncomingHealClampMode(Enum.UnitIncomingHealClampMode.MissingHealth)
+	healthBar.healCalculator:SetIncomingHealOverflowPercent(1)
 
 	--initialize the cast bar
 	healthBar:Initialize()
@@ -668,19 +786,29 @@ detailsFramework.PowerFrameFunctions = {
 	--power update
 	UpdateMaxPower = function(self)
 		self.currentPowerMax = UnitPowerMax(self.displayedUnit, self.powerType)
+		self.currentPowerMissing = UnitPowerMissing(self.displayedUnit, self.powerType)
+		self.currentPowerPercent = UnitPowerPercent(self.displayedUnit, self.powerType, false, CurveConstants.ScaleTo100)
 		self:SetMinMaxValues(self.minPower, self.currentPowerMax)
 
-		if (self.currentPowerMax == 0 and self.Settings.HideIfNoPower) then
+		if (not issecretvalue(self.currentPowerMax) and self.currentPowerMax == 0 and self.Settings.HideIfNoPower) then
 			self:Hide()
+		else
+			self:SetAlpha(self.currentPowerMax)
 		end
 	end,
 
 	UpdatePower = function(self)
 		self.currentPower = UnitPower(self.displayedUnit, self.powerType)
-		PixelUtil.SetStatusBarValue(self, self.currentPower)
+		self.currentPowerMissing = UnitPowerMissing(self.displayedUnit, self.powerType)
+		self.currentPowerPercent = UnitPowerPercent(self.displayedUnit, self.powerType, false, CurveConstants.ScaleTo100)
+		self:SetValue(self.currentPower)
 
 		if (self.Settings.ShowPercentText) then
-			self.percentText:SetText(floor(self.currentPower / self.currentPowerMax * 100) .. "%")
+			if (issecretvalue(self.currentPowerMax) or self.currentPowerMax > 0) then
+				self.percentText:SetText(format("%.3g%%", self.currentPowerPercent))
+			else
+				self.percentText:SetText("")
+			end
 		end
 	end,
 
@@ -917,19 +1045,21 @@ detailsFramework.CastFrameFunctions = {
 
 		--can be regular cast or channel
 		OnCastStart = {},
+		
+		OnEvent = {},
 	},
 
 	CastBarEvents = {
-		{"UNIT_SPELLCAST_INTERRUPTED"},
-		{"UNIT_SPELLCAST_DELAYED"},
-		{"UNIT_SPELLCAST_CHANNEL_START"},
-		{"UNIT_SPELLCAST_CHANNEL_UPDATE"},
-		{"UNIT_SPELLCAST_CHANNEL_STOP"},
-		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_EMPOWER_START"},
-		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_EMPOWER_UPDATE"},
-		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_EMPOWER_STOP"},
-		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_INTERRUPTIBLE"},
-		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_NOT_INTERRUPTIBLE"},
+		{"UNIT_SPELLCAST_INTERRUPTED", true},
+		{"UNIT_SPELLCAST_DELAYED", true},
+		{"UNIT_SPELLCAST_CHANNEL_START", true},
+		{"UNIT_SPELLCAST_CHANNEL_UPDATE", true},
+		{"UNIT_SPELLCAST_CHANNEL_STOP", true},
+		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_EMPOWER_START", true},
+		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_EMPOWER_UPDATE", true},
+		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_EMPOWER_STOP", true},
+		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_INTERRUPTIBLE", true},
+		{(IS_WOW_PROJECT_MAINLINE) and "UNIT_SPELLCAST_NOT_INTERRUPTIBLE", true},
 		{"PLAYER_ENTERING_WORLD"},
 		{"UNIT_SPELLCAST_START", true},
 		{"UNIT_SPELLCAST_STOP", true},
@@ -963,6 +1093,7 @@ detailsFramework.CastFrameFunctions = {
 			Empowered = detailsFramework:CreateColorTable (1, 0.73, .1, 1),
 			Finished = detailsFramework:CreateColorTable (0, 1, 0, 1),
 			NonInterruptible = detailsFramework:CreateColorTable (.7, .7, .7, 1),
+			Important = detailsFramework:CreateColorTable (.5, .0, .5, 1),
 			Failed = detailsFramework:CreateColorTable (.4, .4, .4, 1),
 			Interrupted = detailsFramework:CreateColorTable (.965, .754, .154, 1),
 		},
@@ -1024,36 +1155,96 @@ detailsFramework.CastFrameFunctions = {
 		assert(type(colorType) == "string", "DetailsFramework: CastBar:SetDefaultColor require a string in the first argument.")
 		self.Colors[colorType]:SetColor(r, g, b, a)
 	end,
+	
+	SplitEvaluateColor = function(state, r1, g1, b1, a1, r2, g2, b2, a2)
+		return C_CurveUtil.EvaluateColorValueFromBoolean(state, r1, r2),
+			C_CurveUtil.EvaluateColorValueFromBoolean(state, g1, g2),
+			C_CurveUtil.EvaluateColorValueFromBoolean(state, b1, b2),
+			C_CurveUtil.EvaluateColorValueFromBoolean(state, a1 or 1, a2 or 1)
+	end,
 
 	--this get a color suggestion based on the type of cast being shown in the cast bar
 	GetCastColor = function(self)
-		if (not self.canInterrupt) then
-			return self.Colors.NonInterruptible
-			
-		elseif (self.empowered) then
-			return self.Colors.Empowered
-
-		elseif (self.channeling) then
-			return self.Colors.Channeling
-
-		elseif (self.failed) then
-			return self.Colors.Failed
-
-		elseif (self.interrupted) then
-			return self.Colors.Interrupted
-
-		elseif (self.finished) then
-			return self.Colors.Finished
-
-		else
-			return self.Colors.Casting
+		local r, g, b, a = 0, 0, 0, 0
+		
+		if (self.casting ~= nil) then
+			local c = self.Colors.Casting
+			if c then
+				r, g, b, a = self.SplitEvaluateColor(self.casting, c.r, c.g, c.b, c.a, r, g, b, a)
+			end
 		end
+		if (self.finished ~= nil) then
+			local c = self.Colors.Finished
+			if c then
+				r, g, b, a = self.SplitEvaluateColor(self.finished, c.r, c.g, c.b, c.a, r, g, b, a)
+			end
+		end
+		if (self.interrupted ~= nil) then
+			local c = self.Colors.Interrupted
+			if c then
+				r, g, b, a = self.SplitEvaluateColor(self.interrupted, c.r, c.g, c.b, c.a, r, g, b, a)
+			end
+		end
+		if (self.failed ~= nil) then
+			local c = self.Colors.Failed
+			if c then
+				r, g, b, a = self.SplitEvaluateColor(self.failed, c.r, c.g, c.b, c.a, r, g, b, a)
+			end
+		end
+		if (self.channeling ~= nil) then
+			local c = self.Colors.Channeling
+			if c then
+				r, g, b, a = self.SplitEvaluateColor(self.channeling, c.r, c.g, c.b, c.a, r, g, b, a)
+			end
+		end
+		if (self.empowered ~= nil) then
+			local c = self.Colors.Empowered
+			if c then
+				r, g, b, a = self.SplitEvaluateColor(self.empowered, c.r, c.g, c.b, c.a, r, g, b, a)
+			end
+		end
+		if (self.isImportant ~= nil) then
+			local c = self.Colors.Important
+			if c then
+				r, g, b, a = self.SplitEvaluateColor(self.isImportant, c.r, c.g, c.b, c.a, r, g, b, a)
+			end
+		end
+		if (self.notInterruptible ~= nil) then
+			local c = self.Colors.NonInterruptible
+			if c then
+				r, g, b, a = self.SplitEvaluateColor(self.notInterruptible, c.r, c.g, c.b, c.a, r, g, b, a)
+			end
+		end
+		
+		--if not self.CastColorPriority then
+		--	self.CastColorPriority = {}
+		--	table.insert(self.CastColorPriority, { c = "NonInterruptible", m = "notInterruptible", invert = false })
+		--	table.insert(self.CastColorPriority, { c = "Important", m = "isImportant", invert = false })
+		--	table.insert(self.CastColorPriority, { c = "Channeling", m = "channeling", invert = false })
+		--	table.insert(self.CastColorPriority, { c = "Failed", m = "failed", invert = false })
+		--	table.insert(self.CastColorPriority, { c = "Interrupted", m = "interrupted", invert = false })
+		--	table.insert(self.CastColorPriority, { c = "Finished", m = "finished", invert = false })
+		--	table.insert(self.CastColorPriority, { c = "Casting", m = "casting", invert = false })
+		--end
+		--
+		--for index = #self.CastColorPriority, 1, -1 do
+		--	local colorInfo = self.CastColorPriority[index]
+		--	local tc = self.Colors[colorInfo.c]
+		--	if tc and self[colorInfo.m] ~= nil then
+		--		if colorInfo.invert then
+		--			r, g, b, a = self.SplitEvaluateColor(self[colorInfo.m], r, g, b, a, tc.r, tc.g, tc.b, tc.a)
+		--		else
+		--			r, g, b, a = self.SplitEvaluateColor(self[colorInfo.m], tc.r, tc.g, tc.b, tc.a, r, g, b, a)
+		--		end
+		--	end
+		--end
+		return {r = r, g = g, b = b, a = a}
 	end,
 
 	--update all colors of the cast bar
 	UpdateCastColor = function(self)
 		local castColor = self:GetCastColor()
-		self:SetColor(castColor) --SetColor handles with ParseColors()
+		self:GetStatusBarTexture():SetVertexColor(castColor.r, castColor.g, castColor.b, castColor.a)
 	end,
 
 	--initial checks to know if this is a valid cast and should show the cast bar, if this fails the cast bar won't show
@@ -1063,7 +1254,7 @@ detailsFramework.CastFrameFunctions = {
 		end
 
 		if (not self.Settings.ShowTradeSkills) then
-			if (isTradeSkill) then
+			if (not issecretvalue(isTradeSkill) and isTradeSkill) then
 				return false
 			end
 		end
@@ -1078,10 +1269,15 @@ detailsFramework.CastFrameFunctions = {
 	--handle the interrupt state of the cast
 	--this does not change the cast bar color because this function is called inside the start cast where is already handles the cast color
 	UpdateInterruptState = function(self)
-		if (self.Settings.ShowShield and not self.canInterrupt) then
+		if (self.Settings.ShowShield) then
 			self.BorderShield:Show()
 		else
 			self.BorderShield:Hide()
+		end
+		if self.notInterruptible ~= nil then
+			self.BorderShield:SetAlphaFromBoolean(self.notInterruptible, 1, 0)
+		else
+			self.BorderShield:SetAlpha(0)
 		end
 	end,
 
@@ -1089,14 +1285,16 @@ detailsFramework.CastFrameFunctions = {
 	CheckCastIsDone = function(self, event, isFinished)
 		--check max value
 		if (not isFinished and not self.finished) then
-			if (self.casting) then
-				if (self.value >= self.maxValue) then
-					isFinished = true
-				end
+			if not issecretvalue(self.value) and not issecretvalue(self.maxValue) then
+				if (self.casting) then
+					if (self.value >= self.maxValue) then
+						isFinished = true
+					end
 
-			elseif (self.channeling) then
-				if (self.value > self.maxValue or self.value <= 0) then
-					isFinished = true
+				elseif (self.channeling) then
+					if (self.value > self.maxValue or self.value <= 0) then
+						isFinished = true
+					end
 				end
 			end
 
@@ -1130,7 +1328,7 @@ detailsFramework.CastFrameFunctions = {
 			--reset the cast bar
 			self.casting = nil
 			self.channeling = nil
-			self.caninterrupt = nil
+			self.canInterrupt = nil
 
 			--register events
 			if (unit) then
@@ -1251,7 +1449,7 @@ detailsFramework.CastFrameFunctions = {
 					--[[if not self.spellStartTime then
 						self:UpdateCastingInfo(self.unit)
 					end]]--
-					self.value = GetTime() - self.spellStartTime
+					self.value = GetTimePreciseSec() * 1000 --GetTime() - self.spellStartTime
 				end
 
 				self:RunHooksForWidget("OnShow", self, self.unit)
@@ -1262,7 +1460,8 @@ detailsFramework.CastFrameFunctions = {
 					--[[if not self.spellEndTime then
 						self:UpdateChannelInfo(self.unit)
 					end]]--
-					self.value = self.empowered and (GetTime() - self.spellStartTime) or (self.spellEndTime - GetTime())
+					--self.value = self.empowered and (GetTime() - self.spellStartTime) or (self.spellEndTime - GetTime())
+					 self.value = GetTimePreciseSec() * 1000
 				end
 
 				self:RunHooksForWidget("OnShow", self, self.unit)
@@ -1270,7 +1469,7 @@ detailsFramework.CastFrameFunctions = {
 		end
 	end,
 
-	--it's triggering several events since it's not registered for the unit with RegisterUnitEvent
+	--it's triggering several events since it's not registered for the unit with RegisterUnitEvent (for some)
 	OnEvent = function(self, event, ...)
 		local arg1 = ...
 		local unit = self.unit
@@ -1289,6 +1488,7 @@ detailsFramework.CastFrameFunctions = {
 		local eventFunc = self [event]
 		if (eventFunc) then
 			eventFunc (self, unit, ...)
+			self:RunHooksForWidget("OnEvent", self, self.unit, event)
 		end
 	end,
 
@@ -1298,15 +1498,11 @@ detailsFramework.CastFrameFunctions = {
 			--update the cast time
 			if (self.Settings.ShowCastTime) then
 				if (self.casting) then
-					self.percentText:SetText(format("%.1f", abs(self.value - self.maxValue)))
+					self.percentText:SetText(format("%.1f", self.durationObject:GetRemainingDuration()))
 
 				elseif (self.channeling) then
-					local remainingTime = self.empowered and abs(self.value - self.maxValue) or abs(self.value)
-					if (remainingTime > 999) then
-						self.percentText:SetText("")
-					else
-						self.percentText:SetText(format("%.1f", remainingTime))
-					end
+					--local remainingTime = self.empowered and abs(self.value - self.maxValue) or abs(self.value)
+					self.percentText:SetText(format("%.1f", self.durationObject:GetRemainingDuration()))
 				else
 					self.percentText:SetText("")
 				end
@@ -1320,30 +1516,20 @@ detailsFramework.CastFrameFunctions = {
 
 	--tick function for regular casts
 	OnTick_Casting = function(self, deltaTime)
-		self.value = self.value + deltaTime
-
 		if (self:CheckCastIsDone()) then
-			return
-		else
-			self:SetValue(self.value)
+			return false
 		end
-
+		
 		--in order to allow the lazy tick run, it must return true, it tell that the cast didn't finished
 		return true
 	end,
 
 	--tick function for channeling casts
 	OnTick_Channeling = function(self, deltaTime)
-		self.value = self.empowered and self.value + deltaTime or self.value - deltaTime
-
 		if (self:CheckCastIsDone()) then
-			return
-		else
-			self:SetValue(self.value)
+			return false
 		end
-
-		self:CreateOrUpdateEmpoweredPips()
-
+		
 		return true
 	end,
 
@@ -1396,6 +1582,7 @@ detailsFramework.CastFrameFunctions = {
 		local castBar = self:GetParent()
 		castBar:Show()
 		castBar:SetAlpha(1)
+		castBar:UpdateInterruptState() -- animations and alpha are a bit weird sometimes...
 	end,
 
 	--animation calls
@@ -1469,11 +1656,14 @@ detailsFramework.CastFrameFunctions = {
 	end,
 
 	UpdateCastingInfo = function(self, unit, ...)
-		local unitID, castID, spellID = ...
-		local name, text, texture, startTime, endTime, isTradeSkill, uciCastID, notInterruptible, uciSpellID = CastInfo.UnitCastingInfo(unit)
-		spellID = uciSpellID or spellID
-		castID = uciCastID or castID
+		local unitID, castID, spellID, castBarID = ...
+		local name, text, texture, startTime, endTime, isTradeSkill, uciCastID, notInterruptible, uciSpellID, uciCastBarID = CastInfo.UnitCastingInfo(unit)
+		spellID = uciSpellID --or spellID
+		castID = uciCastID --or castID
+		castBarID = castBarID or uciCastBarID
+		local durationObject = UnitCastingDuration(unit)
 		
+--[[
 		if spellID and (not name or not texture or not text) then
 			local siName, _, siIcon, siCastTime = GetSpellInfo(spellID)
 			texture = texture or siIcon
@@ -1484,11 +1674,12 @@ detailsFramework.CastFrameFunctions = {
 				endTime = startTime + siCastTime
 			end
 		end
-
+]]--
 		--is valid?
 		if (not self:IsValid(unit, name, isTradeSkill, true)) then
 			return
 		end
+		
 
 		--empowered? no!
 			self.holdAtMaxTime = nil
@@ -1504,24 +1695,33 @@ detailsFramework.CastFrameFunctions = {
 			self.interrupted = nil
 			self.failed = nil
 			self.finished = nil
-			self.canInterrupt = not notInterruptible
+			self.canInterrupt = nil
+			self.notInterruptible = notInterruptible
 			self.spellID = spellID
 			self.castID = castID
 			self.spellName = name
 			self.spellTexture = texture
-			self.spellStartTime = startTime / 1000
-			self.spellEndTime = endTime / 1000
-			self.value = GetTime() - self.spellStartTime
-			self.maxValue = self.spellEndTime - self.spellStartTime
+			self.spellStartTime = startTime --startTime / 1000
+			self.spellEndTime = endTime --endTime / 1000
+			self.value = GetTimePreciseSec() * 1000 --GetTime() - self.spellStartTime
+			self.minValue = startTime
+			self.maxValue = endTime --self.spellEndTime - self.spellStartTime
+			self.durationObject = durationObject
+			self.isImportant = C_Spell.IsSpellImportant(spellID)
+			self.castBarID = castBarID
+			self.interruptedBy = nil
 
-			self:SetMinMaxValues(0, self.maxValue)
-			self:SetValue(self.value)
+			--self:SetMinMaxValues(self.minValue, self.maxValue)
+			--self:SetValue(self.value)
+			self:SetTimerDuration(durationObject, Enum.StatusBarInterpolation.Immediate, Enum.StatusBarTimerDirection.ElapsedTime)
+			
 			if (not self.Settings.DontUpdateAlpha) then
 				self:SetAlpha(1)
 			end
 			self.Icon:SetTexture(texture)
 			self.Icon:Show()
-			self.Text:SetText(text or name)
+			--self.Text:SetText(text or name)
+			self.Text:SetText(text)
 
 			if (self.Settings.ShowCastTime and self.Settings.CanLazyTick) then
 				self.percentText:Show()
@@ -1537,33 +1737,50 @@ detailsFramework.CastFrameFunctions = {
 			--set the statusbar color
 			self:UpdateCastColor()
 
-			if (not self:IsShown() and not self.Settings.NoFadeEffects) then
-				self:Animation_FadeIn()
-			end
-
 			self.Spark:Show()
 			self.Spark:SetPoint("CENTER", self.barTexture, "RIGHT", self.Settings.SparkOffset, 0)
 			self:Show()
 
 		--update the interrupt cast border
-		self:UpdateInterruptState()
+			self:UpdateInterruptState()
+			
+		if (not self:IsShown() and not self.Settings.NoFadeEffects) then
+			self:Animation_FadeIn()
+		end
 	end,
 
 	UNIT_SPELLCAST_START = function(self, unit, ...)
+		self.startEventTime = GetTimePreciseSec() * 1000
 		self:UpdateCastingInfo(unit, ...)
 		self:RunHooksForWidget("OnCastStart", self, self.unit, "UNIT_SPELLCAST_START")
 	end,
 
+	GetEmpowerStageColor = function(stage)
+		local stageColors = {
+			[1] = {0.9, 0.23, 0.14, 1}, --e73a23
+			[2] = {1, 0.68, 0, 1}, --ffae00
+			[3] = {0.46, 0.93, 0.27, 1}, --75ec44
+			[4] = {1, 1, 1, 1}, --ffffff
+		}
+		return stage and stageColors[stage] or {1, 1, 1, 1}
+	end,
+
 	CreateOrUpdateEmpoweredPips = function(self, unit, numStages, startTime, endTime)
+		--if issecretvalue(startTime) or issecretvalue(self.spellStartTime) then return end
 		unit = unit or self.unit
+		if unit ~= "player" then return end -- some day this might get work for enemy units
 		numStages = numStages or self.numStages
 		startTime = startTime or ((self.spellStartTime or 0) * 1000)
 		endTime = endTime or ((self.spellEndTime or 0) * 1000)
 
 		if not self.empStages or not numStages or numStages <= 0 then
 			self.stagePips = self.stagePips or {}
+			self.stagePipZones = self.stagePipZones or {}
 			for i, stagePip in pairs(self.stagePips) do
 				stagePip:Hide()
+			end
+			for i, stagePipZone in pairs(self.stagePipZones) do
+				stagePipZone:Hide()
 			end
 			return
 		end
@@ -1578,32 +1795,60 @@ detailsFramework.CastFrameFunctions = {
 			if curDuration > -1 then
 				local stagePip = self.stagePips[i]
 				if not stagePip then
-					stagePip = self:CreateTexture(nil, "overlay", nil, 2)
-					stagePip:SetBlendMode("ADD")
-					stagePip:SetTexture([[Interface\CastingBar\UI-CastingBar-Spark]])
-					stagePip:SetTexCoord(11/32,18/32,9/32,23/32)
-					stagePip:SetSize(2, height)
-					--stagePip = CreateFrame("FRAME", nil, self, "CastingBarFrameStagePipTemplate")
+					stagePip = self:CreateTexture(nil, "artwork", nil, 2)
+					--stagePip:SetBlendMode("ADD")
+					--stagePip:SetColorTexture(1, 1, 1, 1)
+					stagePip:SetColorTexture(0.75, 0.75, 0.75, 1)
+					PixelUtil.SetSize(stagePip, 2, height)
 					self.stagePips[i] = stagePip
 				end
 
 				stagePip:ClearAllPoints()
-				--stagePip:SetPoint("TOP", self, "TOPLEFT", offset, -1)
-				--stagePip:SetPoint("BOTTOM", self, "BOTTOMLEFT", offset, 1)
-				--stagePip.BasePip:SetVertexColor(1, 1, 1, 1)
-				stagePip:SetPoint("CENTER", self, "LEFT", offset, 0)
-				stagePip:SetVertexColor(1, 1, 1, 1)
+				stagePip:SetPoint("TOP", self, "TOPLEFT", offset, 0)
+				stagePip:SetPoint("BOTTOM", self, "BOTTOMLEFT", offset, 0)
+				--stagePip:SetPoint("CENTER", self, "LEFT", offset, 0)
+				--stagePip:SetVertexColor(1, 1, 1, 1)
+				--stagePip:SetColorTexture(unpack(self.GetEmpowerStageColor(i)))
 				stagePip:Show()
 			end
 		end
+
+		for i = 1, numStages, 1 do
+			local curPip = self.stagePips[i]
+			local nextPip = self.stagePips[i+1]
+			if curPip:IsShown() then
+				local stagePipZone = self.stagePipZones[i]
+				if not stagePipZone then
+					stagePipZone = self:CreateTexture(nil, "artwork", nil, -7)
+					--stagePipZone:SetBlendMode("ADD")
+					self.stagePipZones[i] = stagePipZone
+				end
+
+				stagePipZone:ClearAllPoints()
+				stagePipZone:SetPoint("TOPLEFT", curPip, "TOP")
+				if nextPip and nextPip:IsShown() then
+					stagePipZone:SetPoint("BOTTOMRIGHT", nextPip, "BOTTOM", 0, 0)
+					stagePipZone:SetColorTexture(unpack(self.GetEmpowerStageColor(i)))
+				else
+					stagePipZone:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", 0, 0)
+					stagePipZone:SetColorTexture(unpack(self.GetEmpowerStageColor(4)))
+				end
+				
+				stagePipZone:Show()
+			end
+		end
+
 	end,
 
 	UpdateChannelInfo = function(self, unit, ...)
-		local unitID, castID, spellID = ...
-		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, uciSpellID, _, numStages = CastInfo.UnitChannelInfo (unit)
-		spellID = uciSpellID or spellID
-		castID = uciCastID or castID
+		local unitID, castID, spellID, castBarID = ...
+		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, uciSpellID, isEmpowered, numStages, uciCastBarID = CastInfo.UnitChannelInfo (unit)
+		spellID = uciSpellID --or spellID
+		--castID = uciCastID --or castID
+		castBarID = castBarID or uciCastBarID
+		local durationObject = isEmpowered and UnitEmpoweredChannelDuration(unit, self.Settings.ShowEmpoweredDuration) or UnitChannelDuration(unit)
 		
+--[[
 		if spellID and (not name or not texture or not text) then
 			local siName, _, siIcon, siCastTime = GetSpellInfo(spellID)
 			texture = texture or siIcon
@@ -1614,7 +1859,7 @@ detailsFramework.CastFrameFunctions = {
 				endTime = startTime + siCastTime
 			end
 		end
-
+]]--
 		--is valid?
 		if (not self:IsValid (unit, name, isTradeSkill, true)) then
 			return
@@ -1623,11 +1868,15 @@ detailsFramework.CastFrameFunctions = {
 		--empowered?
 			self.empStages = {}
 			self.stagePips = self.stagePips or {}
+			self.stagePipZones = self.stagePipZones or {}
 			for i, stagePip in pairs(self.stagePips) do
 				stagePip:Hide()
 			end
+			for i, stagePipZone in pairs(self.stagePipZones) do
+				stagePipZone:Hide()
+			end
 
-			if numStages and numStages > 0 then
+			if numStages and numStages > 0 and unit == "player" then -- some day this might get work for enemy unitsthen
 				self.holdAtMaxTime = GetUnitEmpowerHoldAtMaxTime(self.unit)
 				self.empowered = true
 				self.numStages = numStages
@@ -1664,19 +1913,26 @@ detailsFramework.CastFrameFunctions = {
 			self.interrupted = nil
 			self.failed = nil
 			self.finished = nil
-			self.canInterrupt = not notInterruptible
+			self.canInterrupt = nil
+			self.notInterruptible = notInterruptible
 			self.spellID = spellID
 			self.castID = castID
 			self.spellName = name
 			self.spellTexture = texture
-			self.spellStartTime = startTime / 1000
-			self.spellEndTime = endTime / 1000
-			self.value = self.empowered and (GetTime() - self.spellStartTime) or (self.spellEndTime - GetTime())
-			self.maxValue = self.spellEndTime - self.spellStartTime
+			self.spellStartTime = startTime --startTime / 1000
+			self.spellEndTime = endTime --endTime / 1000
+			self.value = GetTimePreciseSec() * 1000 --self.empowered and (GetTime() - self.spellStartTime) or (self.spellEndTime - GetTime())
+			self.minValue = startTime
+			self.maxValue = endTime --self.spellEndTime - self.spellStartTime
 			self.reverseChanneling = self.empowered
+			self.durationObject = durationObject
+			self.isImportant = C_Spell.IsSpellImportant(spellID)
+			self.castBarID = castBarID
+			self.interruptedBy = nil
 
-			self:SetMinMaxValues(0, self.maxValue)
-			self:SetValue(self.value)
+			--self:SetMinMaxValues(self.minValue, self.maxValue)
+			--self:SetValue(self.value)
+			self:SetTimerDuration(durationObject, Enum.StatusBarInterpolation.Immediate, self.empowered and Enum.StatusBarTimerDirection.ElapsedTime or Enum.StatusBarTimerDirection.RemainingTime)
 
 			if (not self.Settings.DontUpdateAlpha) then
 				self:SetAlpha(1)
@@ -1699,27 +1955,28 @@ detailsFramework.CastFrameFunctions = {
 			--set the statusbar color
 			self:UpdateCastColor()
 
-			if (not self:IsShown() and not self.Settings.NoFadeEffects) then
-				self:Animation_FadeIn()
-			end
-
 			self.Spark:Show()
 			self.Spark:SetPoint("CENTER", self.barTexture, "RIGHT", self.Settings.SparkOffset, 0)
 			self:Show()
 
 		--update the interrupt cast border
-		self:UpdateInterruptState()
+			self:UpdateInterruptState()
 
+		if (not self:IsShown() and not self.Settings.NoFadeEffects) then
+			self:Animation_FadeIn()
+		end
 	end,
 
 	UNIT_SPELLCAST_CHANNEL_START = function(self, unit, ...)
+		self.startEventTime = GetTimePreciseSec() * 1000
 		self:UpdateChannelInfo(unit, ...)
 		self:RunHooksForWidget("OnCastStart", self, self.unit, "UNIT_SPELLCAST_CHANNEL_START")
 	end,
 
 	UNIT_SPELLCAST_STOP = function(self, unit, ...)
-		local unitID, castID, spellID = ...
-		if (self.castID == castID) then
+		local unitTarget, castGUID, spellID, castBarID = ...
+		
+		if (castBarID == self.castBarID) then
 			if (self.interrupted) then
 				if (self.Settings.HideSparkOnInterrupt) then
 					self.Spark:Hide()
@@ -1731,20 +1988,22 @@ detailsFramework.CastFrameFunctions = {
 			self.percentText:Hide()
 
 			local value = self:GetValue()
-			local _, maxValue = self:GetMinMaxValues()
+			local minValue, maxValue = self:GetMinMaxValues()
 
-			if (self.interrupted) then
-				if (self.Settings.FillOnInterrupt) then
-					self:SetValue(self.maxValue or maxValue or 1)
-				end
+			if (self.interrupted and self.Settings.FillOnInterrupt) then
+				self:SetMinMaxValues(minValue, maxValue)
+				self:SetValue(maxValue)
 			else
-				self:SetValue(self.maxValue or maxValue or 1)
+				self:SetMinMaxValues(minValue, maxValue)
+				self:SetValue(value)
 			end
 
 			self.casting = nil
 			self.channeling = nil
 			self.finished = true
 			self.castID = nil
+			self.castBarID = nil
+			self.interruptedBy = nil
 
 			if (not self:HasScheduledHide()) then
 				--check if settings has no fade option or if its parents are not visible
@@ -1765,61 +2024,115 @@ detailsFramework.CastFrameFunctions = {
 	end,
 
 	UNIT_SPELLCAST_CHANNEL_STOP = function(self, unit, ...)
-		local unitID, castID, spellID = ...
+		local unitID, castID, spellID, interruptedBy, castBarID = ...
 
-		if (self.channeling and castID == self.castID) then
-			self.Spark:Hide()
-			self.percentText:Hide()
+		if (self.channeling and castBarID == self.castBarID) then --and castID == self.castID) then
+			if interruptedBy ~= nil then
+				self:UNIT_SPELLCAST_INTERRUPTED(unit, unitID, castID, spellID, interruptedBy, castBarID)
+			else
+				self.Spark:Hide()
+				self.percentText:Hide()
 
-			local value = self:GetValue()
-			local _, maxValue = self:GetMinMaxValues()
-			self:SetValue(self.maxValue or maxValue or 1)
+				local value = self:GetValue()
+				local minValue, maxValue = self:GetMinMaxValues()
+				self:SetMinMaxValues(minValue, maxValue)
+				self:SetValue(maxValue)
 
-			self.casting = nil
-			self.channeling = nil
-			self.finished = true
-			self.castID = nil
+				self.casting = nil
+				self.channeling = nil
+				self.finished = true
+				self.castID = nil
+				self.castBarID = nil
+				self.interruptedBy = interruptedBy
 
-			if (not self:HasScheduledHide()) then
-				--check if settings has no fade option or if its parents are not visible
-				if (not self:IsVisible()) then
-					self:Hide()
+				if (not self:HasScheduledHide()) then
+					--check if settings has no fade option or if its parents are not visible
+					if (not self:IsVisible()) then
+						self:Hide()
 
-				elseif (self.Settings.NoFadeEffects) then
-					self:ScheduleToHide (0.3)
+					elseif (self.Settings.NoFadeEffects) then
+						self:ScheduleToHide (0.3)
 
-				else
-					self:Animation_Flash()
-					self:Animation_FadeOut()
+					else
+						self:Animation_Flash()
+						self:Animation_FadeOut()
+					end
 				end
+				
+				self:UpdateCastColor()
 			end
-
-			self:UpdateCastColor()
 		end
 	end,
 
 	UNIT_SPELLCAST_EMPOWER_START = function(self, unit, ...)
+		local unitTarget, castGUID, spellID, castBarID = ...
 		self:UNIT_SPELLCAST_CHANNEL_START(unit, ...)
 	end,
 
 	UNIT_SPELLCAST_EMPOWER_UPDATE = function(self, unit, ...)
+		local unitTarget, castGUID, spellID, castBarID = ...
 		self:UNIT_SPELLCAST_CHANNEL_UPDATE(unit, ...)
 	end,
 
 	UNIT_SPELLCAST_EMPOWER_STOP = function(self, unit, ...)
-		self:UNIT_SPELLCAST_CHANNEL_STOP(unit, ...)
+		local unitID, castGUID, spellID, complete, interruptedBy, castBarID = ...
+
+		if (self.channeling and castBarID == self.castBarID) then --and castID == self.castID) then
+			if interruptedBy ~= nil then
+				self:UNIT_SPELLCAST_INTERRUPTED(unit, unitID, castID, spellID, interruptedBy, castBarID)
+			else
+				if issecretvalue(complete) or not complete then
+					self.Spark:Hide()
+					self.percentText:Hide()
+				end
+				
+				local value = self.durationObject:GetElapsedDuration()
+				local minValue, maxValue = 0, self.durationObject:GetTotalDuration()
+				self:SetMinMaxValues(minValue, maxValue)
+				self:SetValue(value)
+
+				self.casting = nil
+				self.channeling = nil
+				self.finished = true
+				self.castID = nil
+				self.castBarID = nil
+				self.interruptedBy = interruptedBy
+
+				if (not self:HasScheduledHide()) then
+					--check if settings has no fade option or if its parents are not visible
+					if (not self:IsVisible()) then
+						self:Hide()
+
+					elseif (self.Settings.NoFadeEffects) then
+						self:ScheduleToHide (0.3)
+
+					else
+						self:Animation_Flash()
+						self:Animation_FadeOut()
+					end
+				end
+				
+				self:UpdateCastColor()
+			end
+		end
 	end,
 
 	UNIT_SPELLCAST_FAILED = function(self, unit, ...)
-		local unitID, castID, spellID = ...
+		local unitID, castID, spellID, castBarID = ...
 
-		if ((self.casting or self.channeling) and castID == self.castID and not self.fadeOut) then
+		if ((self.casting or self.channeling) and castBarID == self.castBarID and not self.fadeOut) then
 			self.casting = nil
 			self.channeling = nil
 			self.failed = true
 			self.finished = true
 			self.castID = nil
-			self:SetValue(self.maxValue or select(2, self:GetMinMaxValues()) or 1)
+			self.castBarID = nil
+			self.interruptedBy = nil
+			
+			local value = self.durationObject:GetElapsedDuration()
+			local minValue, maxValue = 0, self.durationObject:GetTotalDuration()
+			self:SetMinMaxValues(minValue, maxValue)
+			self:SetValue(value)
 
 			--set the statusbar color
 			self:UpdateCastColor()
@@ -1833,25 +2146,32 @@ detailsFramework.CastFrameFunctions = {
 	end,
 
 	UNIT_SPELLCAST_INTERRUPTED = function(self, unit, ...)
-		local unitID, castID, spellID = ...
+		local unitID, castID, spellID, interruptedBy, castBarID = ...
 
-		if ((self.casting or self.channeling) and castID == self.castID and not self.fadeOut) then
+		if ((self.casting or self.channeling) and castBarID == self.castBarID and not self.fadeOut) then
 			self.casting = nil
 			self.channeling = nil
 			self.interrupted = true
 			self.finished = true
 			self.castID = nil
+			self.castBarID = nil
+			self.interruptedBy = interruptedBy
 
+			local value = self.durationObject and self.durationObject:GetElapsedDuration() or 1
+			local minValue, maxValue = 0,  self.durationObject and self.durationObject:GetTotalDuration() or 1
 			if (self.Settings.FillOnInterrupt) then
-				self:SetValue(self.maxValue or select(2, self:GetMinMaxValues()) or 1)
+				self:SetMinMaxValues(minValue, maxValue)
+				self:SetValue(maxValue)
+			else
+				self:SetMinMaxValues(minValue, maxValue)
+				self:SetValue(value)
 			end
 
 			if (self.Settings.HideSparkOnInterrupt) then
 				self.Spark:Hide()
 			end
-
-			local castColor = self:GetCastColor()
-			self:SetColor(castColor) --SetColor handles with ParseColors()
+			
+			self:UpdateCastColor()
 
 			self.percentText:Hide()
 			self.Text:SetText(INTERRUPTED) --auto locale within the global namespace
@@ -1862,43 +2182,50 @@ detailsFramework.CastFrameFunctions = {
 
 	UNIT_SPELLCAST_DELAYED = function(self, unit, ...)
 		local name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible = CastInfo.UnitCastingInfo (unit)
+		local durationObject = UnitCastingDuration(unit)
 
 		if (not self:IsValid (unit, name, isTradeSkill)) then
 			return
 		end
 
 		--update the cast time
-		self.spellStartTime = startTime / 1000
-		self.spellEndTime = endTime / 1000
-		self.value = GetTime() - self.spellStartTime
-		self.maxValue = self.spellEndTime - self.spellStartTime
-		self:SetMinMaxValues(0, self.maxValue)
+		self.spellStartTime = startTime --startTime / 1000
+		self.spellEndTime = endTime --endTime / 1000
+		self.value = GetTimePreciseSec() * 1000 --GetTime() - self.spellStartTime
+		self.maxValue = endTime --self.spellEndTime - self.spellStartTime
+		--self:SetMinMaxValues(self.minValue, self.maxValue)
+		self.durationObject = durationObject
+		self:SetTimerDuration(durationObject, Enum.StatusBarInterpolation.ExponentialEaseOut, Enum.StatusBarTimerDirection.ElapsedTime)
 	end,
 
 	UNIT_SPELLCAST_CHANNEL_UPDATE = function(self, unit, ...)
+		self:UpdateChannelInfo(unit, ...)
+		if true then return end
+		-- seems like the above is more stable. need to investigate why
+		
 		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID, _, numStages = CastInfo.UnitChannelInfo (unit)
+		local durationObject = UnitChannelDuration(unit)
 
 		if (not self:IsValid(unit, name, isTradeSkill)) then
 			return
 		end
 
 		--update the cast time
-		self.spellStartTime = startTime / 1000
-		self.spellEndTime = endTime / 1000
-		self.value = self.empowered and (GetTime() - self.spellStartTime) or (self.spellEndTime - GetTime())
-		self.maxValue = self.spellEndTime - self.spellStartTime
+		self.spellStartTime = startTime --startTime / 1000
+		self.spellEndTime = endTime --endTime / 1000
+		self.value = GetTimePreciseSec() * 1000 --self.empowered and (GetTime() - self.spellStartTime) or (self.spellEndTime - GetTime())
+		self.maxValue = startTime --self.spellEndTime - self.spellStartTime
 
-		if (self.value < 0 or self.value > self.maxValue) then
-			self.value = 0
-		end
-
-		self:SetMinMaxValues(0, self.maxValue)
-		self:SetValue(self.value)
+		--self:SetMinMaxValues(self.minValue, self.maxValue)
+		--self:SetValue(self.value)
+		self.durationObject = durationObject
+		self:SetTimerDuration(durationObject, Enum.StatusBarInterpolation.Immediate, Enum.StatusBarTimerDirection.RemainingTime)
 	end,
 
 	--cast changed its state to interruptable
 	UNIT_SPELLCAST_INTERRUPTIBLE = function(self, unit, ...)
 		self.canInterrupt = true
+		self.notInterruptible = false
 		self:UpdateCastColor()
 		self:UpdateInterruptState()
 	end,
@@ -1906,6 +2233,7 @@ detailsFramework.CastFrameFunctions = {
 	--cast changed its state to non interruptable
 	UNIT_SPELLCAST_NOT_INTERRUPTIBLE = function(self, unit, ...)
 		self.canInterrupt = false
+		self.notInterruptible = true
 		self:UpdateCastColor()
 		self:UpdateInterruptState()
 	end,
@@ -1941,7 +2269,8 @@ function detailsFramework:CreateCastBar(parent, name, settingsOverride)
 			castBar.Text:SetPoint("center", 0, 0)
 
 			castBar.BorderShield = castBar:CreateTexture(nil, "overlay", nil, 5)
-			castBar.BorderShield:Hide()
+			castBar.BorderShield:Show()
+			
 
 			castBar.Icon = castBar:CreateTexture(nil, "overlay", nil, 4)
 			castBar.Icon:Hide()
