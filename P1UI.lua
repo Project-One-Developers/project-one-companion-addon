@@ -462,20 +462,33 @@ function POUI:ToggleOptions()
 end
 
 function POI:ExportLootsPopup(amount)
-    local popup = DF:CreateSimplePanel(UIParent, 800, 300, "Loot Export", "LootExportPopup", {
+    local popup = DF:CreateSimplePanel(UIParent, 1120, 350, "Export", "LootExportPopup", {
         DontRightClickClose = false
     })
     popup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     popup:SetFrameLevel(100)
 
+    -- Loot History (left side)
+    local lootLabel = DF:CreateLabel(popup, "Loot History", 11, "white")
+    lootLabel:SetPoint("TOPLEFT", popup, "TOPLEFT", 10, -30)
+
     popup.export_loot_text_box = DF:NewSpecialLuaEditorEntry(popup, 280, 80, _, "LootExportTextEdit", true, false, true)
-    popup.export_loot_text_box:SetPoint("TOPLEFT", popup, "TOPLEFT", 10, -30)
-    popup.export_loot_text_box:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -30, 40)
+    popup.export_loot_text_box:SetPoint("TOPLEFT", lootLabel.widget, "BOTTOMLEFT", 0, -5)
+    popup.export_loot_text_box:SetPoint("BOTTOMRIGHT", popup, "BOTTOM", -10, 40)
     DF:ApplyStandardBackdrop(popup.export_loot_text_box)
     DF:ReskinSlider(popup.export_loot_text_box.scroll)
-    popup.export_loot_text_box:SetFocus()
     popup.export_loot_text_box:SetText(POI:GetLootHistoryString(amount))
-    getmetatable(popup.export_loot_text_box.editbox).__index.HighlightText(popup.export_loot_text_box.editbox) -- need this bullshit because its not exposed in the API
+
+    -- Comp (right side)
+    local compLabel = DF:CreateLabel(popup, "Comp", 11, "white")
+    compLabel:SetPoint("TOPLEFT", popup, "TOP", 10, -30)
+
+    popup.comp_export_text_box = DF:NewSpecialLuaEditorEntry(popup, 280, 80, _, "LootExportCompTextEdit", true, false, true)
+    popup.comp_export_text_box:SetPoint("TOPLEFT", compLabel.widget, "BOTTOMLEFT", 0, -5)
+    popup.comp_export_text_box:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -30, 40)
+    DF:ApplyStandardBackdrop(popup.comp_export_text_box)
+    DF:ReskinSlider(popup.comp_export_text_box.scroll)
+    popup.comp_export_text_box:SetText(POI:GetCompString())
 
     return popup
 end
