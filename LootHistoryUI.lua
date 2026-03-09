@@ -102,7 +102,8 @@ function LHUI:BuildLootTab(parent)
         { text = "Boss",       width = 140 },
         { text = "Difficulty", width = 80 },
         { text = "Player",     width = 110 },
-        { text = "Item",       width = 200 },
+        { text = "Bind",       width = 50 },
+        { text = "Item",       width = 170 },
     }
 
     local resultsFrame = CreateFrame("frame", parent:GetName() .. "LootResultsFrame", parent)
@@ -113,6 +114,24 @@ function LHUI:BuildLootTab(parent)
     resultsFrame.Header:SetPoint("topleft", resultsFrame, "topleft", 0, 20)
 
     -- Scroll refresh function
+    local bindCache = {}
+    local function GetBindLabel(itemLink)
+        local cached = bindCache[itemLink]
+        if cached ~= nil then return cached end
+
+        local tooltipData = C_TooltipInfo.GetHyperlink(itemLink)
+        if not tooltipData then return "" end
+        for _, line in ipairs(tooltipData.lines) do
+            local text = line.leftText
+            if text then
+                if text == ITEM_BIND_ON_EQUIP then bindCache[itemLink] = "BoE"; return "BoE" end
+                if text:find("Warband") then bindCache[itemLink] = "WUE"; return "WUE" end
+                if text == ITEM_ACCOUNTBOUND or text == ITEM_BNETACCOUNTBOUND then bindCache[itemLink] = "BoA"; return "BoA" end
+            end
+        end
+        bindCache[itemLink] = ""
+        return ""
+    end
     local function refresh(self, data, offset, totalLines)
         local needsRetry = false
         for i = 1, totalLines do
@@ -140,13 +159,16 @@ function LHUI:BuildLootTab(parent)
                         local qtyStr = (thisData.quantity and thisData.quantity > 1) and (thisData.quantity .. "x") or ""
                         local iconStr = itemIcon and ("|T" .. itemIcon .. ":16|t ") or ""
                         line.Item:SetText(iconStr .. qtyStr .. itemLinkQ)
+                        line.Bind:SetText(GetBindLabel(thisData.itemLink))
                     else
                         local iconStr = itemIcon and ("|T" .. itemIcon .. ":16|t ") or ""
                         line.Item:SetText(iconStr .. "...")
+                        line.Bind:SetText("")
                         needsRetry = true
                     end
                 else
                     line.Item:SetText("")
+                    line.Bind:SetText("")
                 end
             end
         end
@@ -191,6 +213,9 @@ function LHUI:BuildLootTab(parent)
         local playerText = DF:CreateLabel(line, "")
         playerText:SetFont(expressway, 11, "OUTLINE")
 
+        local bindText = DF:CreateLabel(line, "")
+        bindText:SetFont(expressway, 11, "OUTLINE")
+
         local itemText = DF:CreateLabel(line, "")
         itemText:SetFont(expressway, 11, "OUTLINE")
 
@@ -199,6 +224,7 @@ function LHUI:BuildLootTab(parent)
         line:AddFrameToHeaderAlignment(bossText)
         line:AddFrameToHeaderAlignment(diffText)
         line:AddFrameToHeaderAlignment(playerText)
+        line:AddFrameToHeaderAlignment(bindText)
         line:AddFrameToHeaderAlignment(itemText)
 
         line:AlignWithHeader(header, "left")
@@ -209,6 +235,7 @@ function LHUI:BuildLootTab(parent)
         line.Difficulty = diffText
         line.Player = playerText
         line.Item = itemText
+        line.Bind = bindText
 
         -- Tooltip on item column only
         local itemHitFrame = CreateFrame("Frame", nil, line)
@@ -297,6 +324,7 @@ function LHUI:RefreshData()
 
     local result = {}
     local search = self.currentSearch and self.currentSearch()
+    local diffCache = {}
 
     for i = #POC.LootHistory.list, 1, -1 do
         local parsed = LH:ParseRecord(POC.LootHistory.list[i])
@@ -307,7 +335,12 @@ function LHUI:RefreshData()
         local bossName = POC.LootHistory.bossNames[parsed.encounterID] or ""
         if parsed.encounterID == 0 then bossName = "" end
 
-        local diffName = GetDifficultyInfo(parsed.difficulty) or ""
+        local diffID = parsed.difficulty
+        local diffName = diffCache[diffID]
+        if diffName == nil then
+            diffName = GetDifficultyInfo(diffID) or ""
+            diffCache[diffID] = diffName
+        end
 
         local classToken = LH.CLASS_ID_TO_STRING[parsed.classID]
         local rollIcon = (parsed.rollType and LH.ROLL_TYPE_ICONS[parsed.rollType]) or ""
