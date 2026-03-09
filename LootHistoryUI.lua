@@ -210,14 +210,16 @@ function LHUI:BuildLootTab(parent)
         line.Player = playerText
         line.Item = itemText
 
-        -- Tooltip on hover
-        line:SetScript("OnEnter", function(self)
-            if self.data and self.data.itemLink then
-                GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
-                GameTooltip:SetHyperlink(self.data.itemLink)
+        -- Tooltip on item column only
+        local itemHitFrame = CreateFrame("Frame", nil, line)
+        itemHitFrame:SetAllPoints(itemText.widget)
+        itemHitFrame:EnableMouse(true)
+        itemHitFrame:SetScript("OnEnter", function()
+            if line.data and line.data.itemLink then
+                GameTooltip:SetOwner(itemText.widget, "ANCHOR_CURSOR")
+                GameTooltip:SetHyperlink(line.data.itemLink)
                 GameTooltip:Show()
-
-                self:SetScript("OnUpdate", function()
+                itemHitFrame:SetScript("OnUpdate", function()
                     if IsShiftKeyDown() then
                         GameTooltip_ShowCompareItem()
                     else
@@ -226,10 +228,9 @@ function LHUI:BuildLootTab(parent)
                 end)
             end
         end)
-
-        line:SetScript("OnLeave", function(self)
+        itemHitFrame:SetScript("OnLeave", function()
             GameTooltip:Hide()
-            self:SetScript("OnUpdate", nil)
+            itemHitFrame:SetScript("OnUpdate", nil)
         end)
 
         -- Click handler
